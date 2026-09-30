@@ -29,6 +29,18 @@ class Config(BaseModel):
         default="live-transcript",
         description="Discord text channel name where live transcripts are sent",
     )
+    STT_ENGINE: str = Field(
+        default="sensevoice",
+        description="Speech-to-text engine: 'sensevoice' (<100ms, emotion detection) or 'whisper' (large-v3, 99+ languages)",
+    )
+    SENSEVOICE_MODEL_ID: str = Field(
+        default="csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
+        description="Hugging Face repository ID for SenseVoice ONNX model",
+    )
+    ENABLE_RICH_EVENTS: bool = Field(
+        default=True,
+        description="Render SenseVoice emotion and audio event tags with emojis (e.g. laughter, applause)",
+    )
     WHISPER_MODEL_SIZE: str = Field(
         default="large-v3",
         description="Whisper model size: tiny, base, small, medium, large-v3, large-v3-turbo",
@@ -117,6 +129,9 @@ def load_config(config_path: Optional[str | Path] = None) -> Config:
         "DISCORD_TOKEN": str,
         "GUILD_ID": lambda x: int(x) if x and x.strip() else None,
         "TRANSCRIPT_CHANNEL_NAME": str,
+        "STT_ENGINE": str,
+        "SENSEVOICE_MODEL_ID": str,
+        "ENABLE_RICH_EVENTS": lambda x: str(x).lower() in ("true", "1", "yes"),
         "WHISPER_MODEL_SIZE": str,
         "DEVICE": str,
         "COMPUTE_TYPE": str,

@@ -131,6 +131,7 @@ def verify_libraries():
         ("discord.ext.voice_recv", "discord-ext-voice-recv"),
         ("faster_whisper", "faster-whisper"),
         ("ctranslate2", "ctranslate2"),
+        ("sherpa_onnx", "sherpa-onnx"),
         ("numpy", "numpy"),
         ("pydantic", "pydantic"),
     ]

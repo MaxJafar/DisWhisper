@@ -12,7 +12,7 @@ import sys
 
 from diswhisper.bot import DisWhisperBot
 from diswhisper.config import load_config
-from diswhisper.transcriber.engine import WhisperEngine
+from diswhisper.transcriber.factory import create_stt_engine
 
 
 def setup_logging(level_name: str) -> None:
@@ -38,7 +38,7 @@ def setup_logging(level_name: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="DisWhisper - Real-time Discord Meeting Transcriber powered by Whisper Large-v3"
+        description="DisWhisper - Real-time Discord Meeting Transcriber (SenseVoice & Whisper)"
     )
     parser.add_argument(
         "--config",
@@ -46,6 +46,14 @@ def main() -> None:
         type=str,
         default=None,
         help="Path to custom config.json file",
+    )
+    parser.add_argument(
+        "--engine",
+        "-e",
+        type=str,
+        default=None,
+        choices=["sensevoice", "whisper"],
+        help="Speech-to-text backend engine ('sensevoice' or 'whisper')",
     )
     parser.add_argument(
         "--model",
@@ -65,6 +73,8 @@ def main() -> None:
 
     # 1. Load configuration
     cfg = load_config(args.config)
+    if args.engine:
+        cfg.STT_ENGINE = args.engine
     if args.model:
         cfg.WHISPER_MODEL_SIZE = args.model
     if args.device:
@@ -88,17 +98,12 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # 4. Initialize Local Whisper Model
-    logger.info(f"Initializing Whisper engine (Model: {cfg.WHISPER_MODEL_SIZE}, Device: {cfg.DEVICE})...")
+    # 4. Initialize Local STT Engine
+    logger.info(f"Initializing STT engine (Engine: {cfg.STT_ENGINE}, Device: {cfg.DEVICE})...")
     try:
-        engine = WhisperEngine(
-            model_size=cfg.WHISPER_MODEL_SIZE,
-            device=cfg.DEVICE,
-            compute_type=cfg.COMPUTE_TYPE,
-            language=cfg.LANGUAGE,
-        )
+        engine = create_stt_engine(cfg)
     except Exception as e:
-        logger.critical(f"Failed to initialize Whisper engine: {e}", exc_info=True)
+        logger.critical(f"Failed to initialize STT engine: {e}", exc_info=True)
         sys.exit(1)
 
     # 5. Launch Bot

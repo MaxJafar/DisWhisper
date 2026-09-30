@@ -12,12 +12,14 @@ from typing import Optional, Tuple
 import numpy as np
 from faster_whisper import WhisperModel
 
+from diswhisper.transcriber.base import BaseSTTEngine
+
 logger = logging.getLogger(__name__)
 
 
-class WhisperEngine:
+class WhisperEngine(BaseSTTEngine):
     """
-    Wrapper for faster-whisper CTranslate2 model.
+    Wrapper for faster-whisper CTranslate2 model implementing BaseSTTEngine.
     Handles device selection, compute precision, and OOM exception handling.
     """
 
@@ -29,37 +31,55 @@ class WhisperEngine:
         language: Optional[str] = "en",
         beam_size: int = 1,
     ):
-        self.model_size = model_size
+        self._model_size = model_size
         self.requested_device = device
-        self.compute_type = compute_type
+        self.requested_compute_type = compute_type
         self.language = language
         self.beam_size = beam_size
 
         self.model: Optional[WhisperModel] = None
-        self.active_device = device
-        self.active_compute_type = compute_type
+        self._active_device = device
+        self._active_compute_type = compute_type
 
         self._load_model()
+
+    @property
+    def engine_name(self) -> str:
+        return "Whisper (faster-whisper)"
+
+    @property
+    def model_name(self) -> str:
+        return self._model_size
+
+    @property
+    def active_device(self) -> str:
+        return self._active_device
+
+    @property
+    def active_compute_type(self) -> str:
+        return self._active_compute_type
 
     def _load_model(self) -> None:
         """Load the faster-whisper model with automatic CPU fallback if CUDA fails."""
         device_to_try = self.requested_device
-        compute_to_try = self.compute_type
+        compute_to_try = self.requested_compute_type
 
         logger.info(
-            f"Loading Whisper model '{self.model_size}' on device='{device_to_try}' "
+            f"Loading Whisper model '{self._model_size}' on device='{device_to_try}' "
             f"with compute_type='{compute_to_try}'..."
         )
 
         try:
             self.model = WhisperModel(
-                model_size_or_path=self.model_size,
+                model_size_or_path=self._model_size,
                 device=device_to_try,
                 compute_type=compute_to_try,
             )
-            self.active_device = device_to_try
-            self.active_compute_type = compute_to_try
-            logger.info(f"Whisper model '{self.model_size}' loaded successfully on {device_to_try} ({compute_to_try}).")
+            self._active_device = device_to_try
+            self._active_compute_type = compute_to_try
+            logger.info(
+                f"Whisper model '{self._model_size}' loaded successfully on {device_to_try} ({compute_to_try})."
+            )
         except Exception as e:
             if device_to_try == "cuda":
                 logger.warning(
@@ -67,13 +87,13 @@ class WhisperEngine:
                 )
                 try:
                     self.model = WhisperModel(
-                        model_size_or_path=self.model_size,
+                        model_size_or_path=self._model_size,
                         device="cpu",
                         compute_type="int8",
                     )
-                    self.active_device = "cpu"
-                    self.active_compute_type = "int8"
-                    logger.info(f"Fallback to CPU succeeded for model '{self.model_size}'.")
+                    self._active_device = "cpu"
+                    self._active_compute_type = "int8"
+                    logger.info(f"Fallback to CPU succeeded for model '{self._model_size}'.")
                 except Exception as cpu_err:
                     logger.error(f"Fatal error loading Whisper model on CPU fallback: {cpu_err}")
                     raise

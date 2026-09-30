@@ -12,7 +12,7 @@ import time
 from typing import Callable, Coroutine, Optional, Any
 
 from diswhisper.audio.buffer import AudioChunk
-from diswhisper.transcriber.engine import WhisperEngine
+from diswhisper.transcriber.base import BaseSTTEngine
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +22,13 @@ TranscriptCallback = Callable[[int, str, str, float], Coroutine[Any, Any, None]]
 class TranscriptionWorker:
     """
     Consumes AudioChunks from queue and executes inference via asyncio.to_thread.
+    Supports any backend implementing BaseSTTEngine (Whisper, SenseVoice, etc.).
     """
 
     def __init__(
         self,
         queue: asyncio.Queue[AudioChunk],
-        engine: WhisperEngine,
+        engine: BaseSTTEngine,
         on_transcript: TranscriptCallback,
     ):
         self.queue = queue

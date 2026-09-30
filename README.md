@@ -2,11 +2,13 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![SenseVoice](https://img.shields.io/badge/Engine-Alibaba_SenseVoice-purple.svg)](https://github.com/FunAudioLLM/SenseVoice)
 [![Whisper Model](https://img.shields.io/badge/Whisper-Large--v3-brightgreen.svg)](https://github.com/openai/whisper)
+[![sherpa-onnx](https://img.shields.io/badge/Runtime-Sherpa--ONNX-blue.svg)](https://github.com/k2-fsa/sherpa-onnx)
 [![faster-whisper](https://img.shields.io/badge/Engine-CTranslate2-orange.svg)](https://github.com/SYSTRAN/faster-whisper)
 [![Discord.py](https://img.shields.io/badge/Discord.py-2.0+-5865F2.svg)](https://discordpy.readthedocs.io/)
 
-**DisWhisper** is a self-hosted, 100% free, and private Discord meeting transcriber bot powered by **Whisper Large-v3** (via `faster-whisper` and CTranslate2). 
+**DisWhisper** is a self-hosted, 100% free, and private Discord meeting transcriber bot powered by **Alibaba SenseVoice** (<100ms ultra-low latency & emotion detection) and **OpenAI Whisper Large-v3** (multilingual 99+ languages). 
 
 It connects to your Discord voice channel, captures separate audio streams per speaker, buffers and downsamples audio into temporal slices, filters out silence, and streams live real-time transcripts into a designated text channel without lag or rate-limit spam.
 
@@ -14,13 +16,15 @@ It connects to your Discord voice channel, captures separate audio streams per s
 
 ## 🌟 Key Features
 
-- **Local Real-Time Transcription:** Runs directly on your local hardware using `faster-whisper` (CTranslate2) with CUDA acceleration and `float16` precision, achieving end-to-end latency under 3 seconds.
+- **Multi-Engine Hybrid Architecture:** Switch effortlessly between **SenseVoice** (<100ms non-autoregressive streaming) and **Whisper Large-v3** (99+ languages).
+- **Sub-100ms Streaming (SenseVoice):** Alibaba SenseVoice delivers transcription up to 10x faster than Whisper, running in ~140ms on CPU or <70ms on GPU with near-zero VRAM.
+- **Rich Emotion & Audio Event Detection:** Automatically detects and displays reactions with emojis in Discord: laughter (`😂 [laughter]`), applause (`👏 [applause]`), background music (`🎵 [music]`), crying (`😭`), happiness (`😄`), and anger (`😠`).
+- **Comprehensive Multilingual Support (Whisper):** Switch to Whisper Large-v3 whenever you need translation and transcription across 99+ languages including Russian, German, French, Spanish, and Arabic.
+- **Live Engine Hot-Swapping:** Use the `/engine` slash command to change models live during an active call without dropping out of the voice channel.
 - **User-Isolated Audio Buffering:** Decodes raw OPUS packets and isolates distinct PCM audio streams for each speaker by User ID.
-- **Adaptive Silence Gating:** Computes Root Mean Square (RMS) amplitude per 2.5-second temporal chunk; silent chunks are immediately dropped to save GPU cycles and VRAM.
+- **Adaptive Silence Gating:** Computes Root Mean Square (RMS) amplitude per 2.5-second temporal chunk; silent chunks are immediately dropped to save compute and VRAM.
 - **Live Output Interface with Debouncing:** Posts live transcripts to `#live-transcript` and automatically appends speech if the same user continues talking within a 5-second window.
 - **Automatic Meeting Exporter:** Formats and exports clean Markdown meeting transcripts with timestamps and participant summaries to the `transcripts/` directory, and attaches the file directly to Discord when `/leave` is called.
-- **CUDA OOM Recovery & CPU Fallback:** Gracefully recovers from GPU memory exhaustion, purges CUDA cache, and provides an automatic CPU fallback (`int8`).
-- **Slash Commands:** Clean Discord interactions via `/join`, `/leave`, `/status`, and `/export`.
 
 ---
 
@@ -155,7 +159,8 @@ GUILD_ID=your_guild_id_here  # Optional: speeds up slash command sync instantly
 |---------|-------------|
 | `/join` | Connects DisWhisper to your current voice channel, sets up `#live-transcript`, and starts real-time transcription. |
 | `/leave` | Stops recording, disconnects from voice, finalizes the session, and uploads the `.md` transcript file to Discord. |
-| `/status` | Shows real-time metrics: active voice channel, GPU VRAM usage, queue size, and active speakers. |
+| `/engine` | Views or switches active STT backend live between **SenseVoice** and **Whisper**. |
+| `/status` | Shows real-time metrics: active voice channel, active engine, GPU VRAM usage, queue size, and active speakers. |
 | `/export` | Exports a snapshot of the ongoing meeting transcript without disconnecting. |
 
 ---

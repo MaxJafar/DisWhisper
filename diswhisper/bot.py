@@ -20,7 +20,8 @@ from diswhisper.audio.buffer import AudioBufferManager, AudioChunk
 from diswhisper.audio.receiver import DisWhisperSink
 from diswhisper.config import Config
 from diswhisper.exporter.file_logger import TranscriptFileLogger
-from diswhisper.transcriber.engine import WhisperEngine
+from diswhisper.transcriber.base import BaseSTTEngine
+from diswhisper.transcriber.factory import create_stt_engine
 from diswhisper.transcriber.worker import TranscriptionWorker
 from diswhisper.ui.reporter import TranscriptReporter
 
@@ -29,10 +30,10 @@ logger = logging.getLogger(__name__)
 
 class DisWhisperBot(commands.Bot):
     """
-    Discord bot managing voice channel capture and local Whisper transcription.
+    Discord bot managing voice channel capture and multi-engine transcription.
     """
 
-    def __init__(self, config: Config, engine: WhisperEngine):
+    def __init__(self, config: Config, engine: BaseSTTEngine):
         intents = discord.Intents.default()
         intents.guilds = True
         intents.voice_states = True
@@ -76,7 +77,9 @@ class DisWhisperBot(commands.Bot):
 
     async def on_ready(self) -> None:
         logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
-        logger.info(f"DisWhisper ready with Whisper '{self.engine.model_size}' on '{self.engine.active_device}'.")
+        logger.info(
+            f"DisWhisper ready with {self.engine.engine_name} ('{self.engine.model_name}') on '{self.engine.active_device}'."
+        )
 
     async def on_voice_state_update(
         self,
@@ -198,7 +201,8 @@ class DisWhisperBot(commands.Bot):
                     timestamp=datetime.datetime.now(),
                 )
                 embed.add_field(name="Live Transcript Channel", value=f"{transcript_channel.mention}", inline=False)
-                embed.add_field(name="Whisper Model", value=f"`{self.engine.model_size}`", inline=True)
+                embed.add_field(name="Engine", value=f"`{self.engine.engine_name}`", inline=True)
+                embed.add_field(name="Model", value=f"`{self.engine.model_name}`", inline=True)
                 embed.add_field(name="Inference Device", value=f"`{self.engine.active_device} ({self.engine.active_compute_type})`", inline=True)
                 embed.add_field(name="Chunk Interval", value=f"`{self.cfg.CHUNKING_DURATION_SEC}s`", inline=True)
                 embed.set_footer(text="Speak naturally. Silence is automatically filtered.")
@@ -250,7 +254,8 @@ class DisWhisperBot(commands.Bot):
                 timestamp=datetime.datetime.now(),
             )
             embed.add_field(name="Uptime", value=f"`{uptime_str}`", inline=True)
-            embed.add_field(name="Model", value=f"`{self.engine.model_size}`", inline=True)
+            embed.add_field(name="Engine", value=f"`{self.engine.engine_name}`", inline=True)
+            embed.add_field(name="Model", value=f"`{self.engine.model_name}`", inline=True)
             embed.add_field(
                 name="Hardware Device",
                 value=f"`{self.engine.active_device}` (`{self.engine.active_compute_type}`)",
@@ -266,6 +271,9 @@ class DisWhisperBot(commands.Bot):
             active_speakers = self.buffer_manager.active_user_count if self.buffer_manager else 0
             embed.add_field(name="Active Stream Buffers", value=f"`{active_speakers} users`", inline=True)
 
+            rich_status = "Enabled (😂 👏 🎶)" if self.cfg.ENABLE_RICH_EVENTS else "Disabled"
+            embed.add_field(name="Rich Event Badges", value=f"`{rich_status}`", inline=True)
+
             # GPU Memory if CUDA
             if self.engine.active_device == "cuda":
                 try:
@@ -278,6 +286,74 @@ class DisWhisperBot(commands.Bot):
                     pass
 
             await interaction.response.send_message(embed=embed)
+
+        @self.tree.command(name="engine", description="View or switch the active speech-to-text engine (SenseVoice / Whisper)")
+        @app_commands.describe(
+            target_engine="Select STT engine to switch to (leave empty to view current status)"
+        )
+        @app_commands.choices(
+            target_engine=[
+                app_commands.Choice(name="SenseVoice (Alibaba - <100ms ultra-low latency & emotions)", value="sensevoice"),
+                app_commands.Choice(name="Whisper (Large-v3 - 99+ languages & high accuracy)", value="whisper"),
+            ]
+        )
+        async def engine_command(interaction: discord.Interaction, target_engine: Optional[str] = None):
+            if not target_engine:
+                embed = discord.Embed(
+                    title="⚙️ Current STT Engine",
+                    color=discord.Color.purple(),
+                    timestamp=datetime.datetime.now(),
+                )
+                embed.add_field(name="Engine", value=f"**{self.engine.engine_name}**", inline=True)
+                embed.add_field(name="Model", value=f"`{self.engine.model_name}`", inline=True)
+                embed.add_field(name="Device", value=f"`{self.engine.active_device}`", inline=True)
+                embed.add_field(
+                    name="How to switch",
+                    value="Use `/engine target_engine:SenseVoice` or `/engine target_engine:Whisper` to switch on the fly.",
+                    inline=False,
+                )
+                await interaction.response.send_message(embed=embed)
+                return
+
+            await interaction.response.defer(ephemeral=False)
+            try:
+                logger.info(f"Switching STT engine to '{target_engine}'...")
+                old_engine_name = self.engine.engine_name
+
+                # Instantiate new engine using factory
+                new_engine = create_stt_engine(self.cfg, engine_type_override=target_engine)
+
+                # Hot-swap engine in bot and worker
+                self.engine = new_engine
+                if self.worker:
+                    self.worker.engine = new_engine
+
+                embed = discord.Embed(
+                    title="🔄 STT Engine Switched",
+                    description=f"Successfully transitioned from **{old_engine_name}** to **{new_engine.engine_name}**.",
+                    color=discord.Color.green(),
+                    timestamp=datetime.datetime.now(),
+                )
+                embed.add_field(name="Active Model", value=f"`{new_engine.model_name}`", inline=True)
+                embed.add_field(name="Hardware Target", value=f"`{new_engine.active_device} ({new_engine.active_compute_type})`", inline=True)
+
+                if "sensevoice" in target_engine.lower():
+                    embed.add_field(
+                        name="SenseVoice Features",
+                        value="• < 100ms ultra-low latency\n• Emotion & event tags (😂 👏 🎶)\n• Fast on CPU / CUDA",
+                        inline=False,
+                    )
+                else:
+                    embed.add_field(
+                        name="Whisper Features",
+                        value="• 99+ Languages supported (including Russian)\n• CTranslate2 CUDA float16 acceleration",
+                        inline=False,
+                    )
+
+                await interaction.followup.send(embed=embed)
+            except Exception as e:
+                logger.error(f"Failed to switch engine to '{target_engine}': {e}", exc_info=True)
+                await interaction.followup.send(f"❌ Failed to switch engine: `{e}`")
 
         @self.tree.command(name="export", description="Export the current meeting transcript without leaving")
         async def export_command(interaction: discord.Interaction):
