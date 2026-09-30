@@ -1,0 +1,91 @@
+<Page
+    x:Class="DisWhisper.Companion.Views.DashboardPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="20" Padding="0,0,16,24">
+            <!-- Header -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch">
+                <StackPanel>
+                    <TextBlock Text="System Dashboard" FontSize="26" FontWeight="SemiBold"/>
+                    <TextBlock Text="Real-time monitoring and active voice session statistics" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+                <Button Content="Refresh" Click="RefreshButton_Click" HorizontalAlignment="Right" Margin="350,0,0,0">
+                    <Button.Icon>
+                        <FontIcon Glyph="&#xE72C;"/>
+                    </Button.Icon>
+                </Button>
+            </StackPanel>
+
+            <!-- Status Metrics Grid -->
+            <Grid ColumnSpacing="16" RowSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Card 1: Bot Connection -->
+                <Border Grid.Column="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16">
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8BD;" Foreground="{StaticResource DisWhisperBrandBrush}"/>
+                            <TextBlock Text="Discord Bot Status" FontWeight="SemiBold" FontSize="15"/>
+                        </StackPanel>
+                        <TextBlock x:Name="BotStatusText" Text="Connecting..." FontSize="22" FontWeight="Bold" Foreground="{StaticResource DisWhisperGreenBrush}"/>
+                        <TextBlock x:Name="VoiceChannelText" Text="Voice Channel: Disconnected" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock x:Name="UptimeText" Text="Uptime: 0s" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontSize="12"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Card 2: STT Engine -->
+                <Border Grid.Column="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16">
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE9F5;" Foreground="{StaticResource DisWhisperBrandBrush}"/>
+                            <TextBlock Text="Active STT Engine" FontWeight="SemiBold" FontSize="15"/>
+                        </StackPanel>
+                        <TextBlock x:Name="EngineNameText" Text="SenseVoice (Alibaba)" FontSize="20" FontWeight="Bold"/>
+                        <TextBlock x:Name="EngineDetailsText" Text="Model: SenseVoiceSmall-int8" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock x:Name="DeviceText" Text="Target: CPU (int8)" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontSize="12"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Card 3: Hardware & Buffers -->
+                <Border Grid.Column="2" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16">
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE950;" Foreground="{StaticResource DisWhisperBrandBrush}"/>
+                            <TextBlock Text="Engine Performance" FontWeight="SemiBold" FontSize="15"/>
+                        </StackPanel>
+                        <TextBlock x:Name="SpeakersText" Text="Active Speakers: 0" FontSize="18" FontWeight="Bold"/>
+                        <TextBlock x:Name="QueueText" Text="Queue Depth: 0 chunks" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock x:Name="GpuText" Text="GPU VRAM: N/A" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontSize="12"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Quick Engine Switcher Section -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="20">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="⚡ Quick Engine Hot-Swap" FontSize="18" FontWeight="SemiBold"/>
+                    <TextBlock Text="Switch between ultra-low-latency SenseVoice and full multilingual Whisper on the fly." Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <ComboBox x:Name="EngineSelector" Width="280">
+                            <ComboBoxItem Content="Alibaba SenseVoice (&lt;100ms, Emotions)" Tag="sensevoice"/>
+                            <ComboBoxItem Content="OpenAI Whisper Large-v3 (99+ Languages)" Tag="whisper"/>
+                            <ComboBoxItem Content="Groq Cloud Whisper (LPU ~200ms)" Tag="cloud"/>
+                        </ComboBox>
+                        <Button Content="Apply Engine" Click="ApplyEngine_Click" Style="{StaticResource AccentButtonStyle}"/>
+                    </StackPanel>
+                    <TextBlock x:Name="EngineSwitchNotice" Foreground="{StaticResource DisWhisperGreenBrush}" Visibility="Collapsed"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

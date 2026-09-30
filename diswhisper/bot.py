@@ -16,10 +16,12 @@ import discord
 from discord import app_commands
 from discord.ext import commands, voice_recv
 
+from diswhisper.api.server import DisWhisperApiServer
 from diswhisper.audio.buffer import AudioBufferManager, AudioChunk
 from diswhisper.audio.receiver import DisWhisperSink
 from diswhisper.config import Config
 from diswhisper.exporter.file_logger import TranscriptFileLogger
+from diswhisper.summarizer.engine import MeetingSummarizer
 from diswhisper.transcriber.base import BaseSTTEngine
 from diswhisper.transcriber.factory import create_stt_engine
 from diswhisper.transcriber.worker import TranscriptionWorker
@@ -63,6 +65,15 @@ class DisWhisperBot(commands.Bot):
         self.file_logger = TranscriptFileLogger()
         self.start_time = datetime.datetime.now()
 
+        # Embedded API Server for Companion Apps
+        self.api_server: Optional[DisWhisperApiServer] = None
+        if config.ENABLE_API_SERVER:
+            self.api_server = DisWhisperApiServer(
+                bot=self,
+                host=config.API_SERVER_HOST,
+                port=config.API_SERVER_PORT,
+            )
+
     async def setup_hook(self) -> None:
         """Register slash commands upon bot startup."""
         self._register_commands()
@@ -74,6 +85,16 @@ class DisWhisperBot(commands.Bot):
         else:
             await self.tree.sync()
             logger.info("Global slash commands synchronized.")
+
+        # Start API server for Companion Apps
+        if self.api_server:
+            await self.api_server.start()
+
+    async def close(self) -> None:
+        """Gracefully close bot and API server."""
+        if self.api_server:
+            await self.api_server.stop()
+        await super().close()
 
     async def on_ready(self) -> None:
         logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
@@ -102,6 +123,18 @@ class DisWhisperBot(commands.Bot):
         # 2. Persist to markdown meeting file
         if self.cfg.AUTO_SAVE_TRANSCRIPTS:
             self.file_logger.log_utterance(display_name, text, timestamp)
+
+        # 3. Broadcast to connected Companion Apps via WebSocket
+        if self.api_server:
+            await self.api_server.broadcast_event(
+                "transcript_snippet",
+                {
+                    "user_id": user_id,
+                    "speaker": display_name,
+                    "text": text,
+                    "timestamp": timestamp,
+                },
+            )
 
     async def _cleanup_voice_session(self) -> Optional[Path]:
         """Tear down voice client, buffer manager, and finalize transcription worker."""
@@ -370,3 +403,40 @@ class DisWhisperBot(commands.Bot):
                 file=discord_file,
                 ephemeral=False,
             )
+
+        @self.tree.command(name="summarize", description="Generate an AI executive summary and action items for this meeting")
+        async def summarize_command(interaction: discord.Interaction):
+            await interaction.response.defer(ephemeral=False)
+
+            if not self.file_logger.file_path or not self.file_logger.file_path.is_file():
+                await interaction.followup.send(
+                    "⚠️ No active transcript session found to summarize. Start a meeting with `/join` first.",
+                    ephemeral=True,
+                )
+                return
+
+            try:
+                with open(self.file_logger.file_path, "r", encoding="utf-8") as f:
+                    transcript_text = f.read()
+
+                summarizer = MeetingSummarizer(
+                    provider=self.cfg.SUMMARIZER_PROVIDER,
+                    cloud_platform=self.cfg.CLOUD_STT_PROVIDER,
+                    api_key=self.cfg.GROQ_API_KEY if self.cfg.CLOUD_STT_PROVIDER == "groq" else self.cfg.OPENAI_API_KEY,
+                    model_name=self.cfg.SUMMARIZER_MODEL,
+                    local_llm_url=self.cfg.LOCAL_LLM_URL,
+                )
+
+                summary = await summarizer.summarize_transcript(transcript_text)
+
+                # Split message if exceeds Discord 2000 character limit
+                if len(summary) <= 1950:
+                    await interaction.followup.send(summary)
+                else:
+                    chunks = [summary[i : i + 1900] for i in range(0, len(summary), 1900)]
+                    for chunk in chunks:
+                        await interaction.followup.send(chunk)
+
+            except Exception as e:
+                logger.error(f"Error generating AI summary: {e}", exc_info=True)
+                await interaction.followup.send(f"❌ Failed to generate summary: `{e}`")

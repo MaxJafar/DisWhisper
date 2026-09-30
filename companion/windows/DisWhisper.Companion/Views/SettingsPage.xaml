@@ -1,0 +1,79 @@
+<Page
+    x:Class="DisWhisper.Companion.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="24" Padding="0,0,16,24">
+            <!-- Header -->
+            <StackPanel>
+                <TextBlock Text="Detailed Audio &amp; Discord Customization" FontSize="26" FontWeight="SemiBold"/>
+                <TextBlock Text="Fine-tune audio chunking durations, silence gating thresholds, and Discord channel routing" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+
+            <!-- Discord Bot Settings -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="20">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="🤖 Discord Bot Credentials" FontSize="18" FontWeight="SemiBold"/>
+
+                    <PasswordBox x:Name="TokenBox" Header="Discord Bot Token" PlaceholderText="Paste token from Discord Developer Portal" PasswordRevealMode="Peek"/>
+                    
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" x:Name="GuildIdBox" Header="Guild ID (Optional, for instant command sync)" PlaceholderText="e.g. 1234567890"/>
+                        <TextBox Grid.Column="1" x:Name="ChannelNameBox" Header="Transcript Text Channel" PlaceholderText="live-transcript"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Audio DSP Tuning -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="20">
+                <StackPanel Spacing="20">
+                    <TextBlock Text="🎚️ Audio DSP &amp; Chunking Engine" FontSize="18" FontWeight="SemiBold"/>
+
+                    <!-- Chunk Duration -->
+                    <StackPanel Spacing="6">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch">
+                            <TextBlock Text="Chunk Duration (seconds)" FontWeight="Medium"/>
+                            <TextBlock x:Name="ChunkDurationValue" Text="2.5s" HorizontalAlignment="Right" Margin="300,0,0,0" Foreground="{StaticResource DisWhisperBrandBrush}" FontWeight="Bold"/>
+                        </StackPanel>
+                        <Slider x:Name="ChunkDurationSlider" Minimum="1.0" Maximum="5.0" StepFrequency="0.5" Value="2.5" ValueChanged="ChunkDurationSlider_ValueChanged"/>
+                        <TextBlock Text="Shorter intervals lower latency; longer intervals provide richer context to Whisper." FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+
+                    <!-- Silence Threshold -->
+                    <StackPanel Spacing="6">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch">
+                            <TextBlock Text="Silence Gating Threshold (RMS)" FontWeight="Medium"/>
+                            <TextBlock x:Name="SilenceThresholdValue" Text="0.010" HorizontalAlignment="Right" Margin="280,0,0,0" Foreground="{StaticResource DisWhisperBrandBrush}" FontWeight="Bold"/>
+                        </StackPanel>
+                        <Slider x:Name="SilenceSlider" Minimum="0.002" Maximum="0.040" StepFrequency="0.002" Value="0.010" ValueChanged="SilenceSlider_ValueChanged"/>
+                        <TextBlock Text="Audio below this amplitude is discarded immediately to save GPU cycles and VRAM." FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+
+                    <!-- Debounce Time -->
+                    <StackPanel Spacing="6">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch">
+                            <TextBlock Text="Continuous Speech Debounce Window" FontWeight="Medium"/>
+                            <TextBlock x:Name="DebounceValue" Text="5.0s" HorizontalAlignment="Right" Margin="250,0,0,0" Foreground="{StaticResource DisWhisperBrandBrush}" FontWeight="Bold"/>
+                        </StackPanel>
+                        <Slider x:Name="DebounceSlider" Minimum="2.0" Maximum="10.0" StepFrequency="0.5" Value="5.0" ValueChanged="DebounceSlider_ValueChanged"/>
+                        <TextBlock Text="Appends continuous speech to the same Discord message if spoken within this timeframe." FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+
+                    <!-- Auto Save -->
+                    <ToggleSwitch x:Name="AutoSaveToggle" Header="Auto-export meeting Markdown files to transcripts/" IsOn="True"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Save Action Button -->
+            <Button Content="Save Customization Settings" Click="SaveSettings_Click" Style="{StaticResource AccentButtonStyle}" Padding="24,10"/>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

@@ -1,0 +1,108 @@
+<Page
+    x:Class="DisWhisper.Companion.Views.ModelsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="24" Padding="0,0,16,24">
+            <!-- Header -->
+            <StackPanel>
+                <TextBlock Text="Model Manager &amp; Local LLM" FontSize="26" FontWeight="SemiBold"/>
+                <TextBlock Text="Download, manage, and inspect local speech recognition models and on-device LLMs" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+
+            <!-- SenseVoice Card -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="20">
+                <Grid ColumnSpacing="20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="60"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="180"/>
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0" Glyph="&#xE753;" FontSize="36" VerticalAlignment="Center" Foreground="{StaticResource DisWhisperBrandBrush}"/>
+                    <StackPanel Grid.Column="1" Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="Alibaba SenseVoice Small" FontSize="18" FontWeight="SemiBold"/>
+                            <Border Background="{StaticResource DisWhisperGreenBrush}" CornerRadius="4" Padding="6,2">
+                                <TextBlock Text="RECOMMENDED &lt;100ms" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="Ultra-fast non-autoregressive speech model with native emotion and event detection (laughter, applause, music). Runs in ~140ms on CPU or &lt;70ms on GPU with near-zero VRAM." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="Languages: English, Chinese, Cantonese, Japanese, Korean • Size: ~120 MB" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Spacing="8" VerticalAlignment="Center">
+                        <Button Content="Activate Engine" Tag="sensevoice" Click="ActivateEngine_Click" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch"/>
+                        <Button Content="Verify / Redownload" Tag="sensevoice" Click="DownloadModel_Click" HorizontalAlignment="Stretch"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Whisper Large-v3 Card -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="20">
+                <Grid ColumnSpacing="20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="60"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="180"/>
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0" Glyph="&#xE720;" FontSize="36" VerticalAlignment="Center" Foreground="{StaticResource DisWhisperBrandBrush}"/>
+                    <StackPanel Grid.Column="1" Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="OpenAI Whisper Large-v3" FontSize="18" FontWeight="SemiBold"/>
+                            <Border Background="{ThemeResource SystemFillColorNeutralBrush}" CornerRadius="4" Padding="6,2">
+                                <TextBlock Text="99+ LANGUAGES" FontSize="10" FontWeight="Bold"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="State-of-the-art multilingual accuracy for Russian, Spanish, German, French, and international languages. Powered locally by CTranslate2 (CUDA float16 recommended)." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="Languages: 99+ Languages • Size: ~3.1 GB • VRAM: ~3.8 GB" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Spacing="8" VerticalAlignment="Center">
+                        <Button Content="Activate Engine" Tag="whisper" Click="ActivateEngine_Click" HorizontalAlignment="Stretch"/>
+                        <Button Content="Download Model" Tag="large-v3" Click="DownloadModel_Click" HorizontalAlignment="Stretch"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Local LLM (Ollama) Card -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="20">
+                <Grid ColumnSpacing="20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="60"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="180"/>
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0" Glyph="&#xE765;" FontSize="36" VerticalAlignment="Center" Foreground="{StaticResource DisWhisperBrandBrush}"/>
+                    <StackPanel Grid.Column="1" Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="Local Meeting Summarizer (Ollama / Llama 3.2)" FontSize="18" FontWeight="SemiBold"/>
+                            <Border Background="{StaticResource DisWhisperBrandBrush}" CornerRadius="4" Padding="6,2">
+                                <TextBlock Text="100% PRIVATE" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="Generate executive meeting minutes, action items, and agendas completely on-device without cloud API charges or internet data leakage." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="Endpoint: http://localhost:11434 • Models: Llama 3.2, Qwen 2.5, Mistral" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Spacing="8" VerticalAlignment="Center">
+                        <Button Content="Test Ollama Connection" Click="TestOllama_Click" HorizontalAlignment="Stretch"/>
+                        <Button Content="Open Ollama.com" Click="OpenOllamaSite_Click" HorizontalAlignment="Stretch"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Progress Bar Info -->
+            <StackPanel x:Name="DownloadProgressPanel" Visibility="Collapsed" Spacing="8">
+                <TextBlock x:Name="DownloadStatusLabel" Text="Downloading model..." FontWeight="SemiBold"/>
+                <ProgressBar x:Name="ModelProgressBar" Value="0" Maximum="100" Height="8"/>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

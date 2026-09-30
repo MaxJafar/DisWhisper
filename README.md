@@ -20,7 +20,11 @@ It connects to your Discord voice channel, captures separate audio streams per s
 - **Sub-100ms Streaming (SenseVoice):** Alibaba SenseVoice delivers transcription up to 10x faster than Whisper, running in ~140ms on CPU or <70ms on GPU with near-zero VRAM.
 - **Rich Emotion & Audio Event Detection:** Automatically detects and displays reactions with emojis in Discord: laughter (`😂 [laughter]`), applause (`👏 [applause]`), background music (`🎵 [music]`), crying (`😭`), happiness (`😄`), and anger (`😠`).
 - **Comprehensive Multilingual Support (Whisper):** Switch to Whisper Large-v3 whenever you need translation and transcription across 99+ languages including Russian, German, French, Spanish, and Arabic.
-- **Live Engine Hot-Swapping:** Use the `/engine` slash command to change models live during an active call without dropping out of the voice channel.
+- **Cloud STT & LPU Inference:** Offload transcription to Groq Cloud Whisper (~200ms turnaround) or OpenAI Whisper API with a single configuration toggle.
+- **AI Executive Summaries:** Generate structured meeting notes, key agreements, and delegated action items using Cloud LLMs (Groq Llama 3.3 70B, OpenAI GPT-4o, Gemini 1.5 Flash) or 100% private on-device Local LLMs (Ollama / Llama 3.2).
+- **Windows WinUI 3 Companion App:** Beautiful Windows 11 desktop app with Mica design, model download manager, hardware VRAM gauges, and audio tuning sliders.
+- **macOS AppKit Roadmap:** Native AppKit architecture prepared for macOS Apple Silicon with CoreML / MLX acceleration (see [AGENTS.md](AGENTS.md)).
+- **Live Engine Hot-Swapping:** Use the `/engine` slash command or companion GUI to change models live during an active call without dropping out of the voice channel.
 - **User-Isolated Audio Buffering:** Decodes raw OPUS packets and isolates distinct PCM audio streams for each speaker by User ID.
 - **Adaptive Silence Gating:** Computes Root Mean Square (RMS) amplitude per 2.5-second temporal chunk; silent chunks are immediately dropped to save compute and VRAM.
 - **Live Output Interface with Debouncing:** Posts live transcripts to `#live-transcript` and automatically appends speech if the same user continues talking within a 5-second window.
@@ -159,9 +163,35 @@ GUILD_ID=your_guild_id_here  # Optional: speeds up slash command sync instantly
 |---------|-------------|
 | `/join` | Connects DisWhisper to your current voice channel, sets up `#live-transcript`, and starts real-time transcription. |
 | `/leave` | Stops recording, disconnects from voice, finalizes the session, and uploads the `.md` transcript file to Discord. |
-| `/engine` | Views or switches active STT backend live between **SenseVoice** and **Whisper**. |
+| `/engine` | Views or switches active STT backend live between **SenseVoice**, **Whisper**, and **Cloud**. |
+| `/summarize` | Generates an AI executive summary and delegated action items for the ongoing meeting. |
 | `/status` | Shows real-time metrics: active voice channel, active engine, GPU VRAM usage, queue size, and active speakers. |
 | `/export` | Exports a snapshot of the ongoing meeting transcript without disconnecting. |
+
+---
+
+## 🖥️ Companion Applications
+
+DisWhisper includes native desktop control center companion applications for monitoring, model downloading, and fine-grained audio customization:
+
+### Windows Companion App (WinUI 3)
+Built with **Windows App SDK** and **WinUI 3**:
+- **Dashboard:** Real-time speaker activity, Discord voice channel status, and GPU VRAM meter.
+- **Model Manager:** One-click downloads for SenseVoice, Whisper models, and local LLMs (Ollama).
+- **Cloud Providers:** Secure API key vault for Groq LPU, OpenAI, and Google Gemini.
+- **Audio DSP Tuning:** Visual sliders for chunk slicing duration (1.0s–5.0s), RMS silence threshold, and continuous speech debouncing.
+
+**To Setup & Build on Windows:**
+```powershell
+# Run the automated setup script (installs .NET 8 SDK if needed & compiles)
+powershell -ExecutionPolicy Bypass -File scripts\setup_companion.ps1
+
+# Or launch directly
+scripts\run_companion.bat
+```
+
+### macOS Companion App (AppKit / Swift)
+Native macOS companion app utilizing **AppKit** and Apple Silicon optimizations (CoreML / MLX Audio). Detailed architecture, Xcode layout, and implementation guidelines are documented in [AGENTS.md](AGENTS.md).
 
 ---
 

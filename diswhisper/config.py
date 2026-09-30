@@ -78,6 +78,52 @@ class Config(BaseModel):
         description="Logging level: DEBUG, INFO, WARNING, ERROR",
     )
 
+    # Local REST IPC Server for Companion App
+    ENABLE_API_SERVER: bool = Field(
+        default=True,
+        description="Run local HTTP/WebSocket IPC server for Companion App",
+    )
+    API_SERVER_HOST: str = Field(
+        default="127.0.0.1",
+        description="Host interface for Companion App IPC server",
+    )
+    API_SERVER_PORT: int = Field(
+        default=8765,
+        description="Port for Companion App IPC server",
+    )
+
+    # Cloud Provider API Keys
+    GROQ_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Groq Cloud API Key for ultra-fast Cloud Whisper and LLM summaries",
+    )
+    OPENAI_API_KEY: Optional[str] = Field(
+        default=None,
+        description="OpenAI API Key for Whisper-1 and GPT-4o summaries",
+    )
+    GEMINI_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Google Gemini API Key for meeting summaries",
+    )
+    CLOUD_STT_PROVIDER: str = Field(
+        default="groq",
+        description="Default cloud STT provider: 'groq' or 'openai'",
+    )
+
+    # Meeting Summarizer Configuration
+    SUMMARIZER_PROVIDER: str = Field(
+        default="cloud",
+        description="Summarizer provider: 'cloud' (Groq/OpenAI) or 'local' (Ollama)",
+    )
+    SUMMARIZER_MODEL: str = Field(
+        default="llama-3.3-70b-versatile",
+        description="Model identifier for meeting summarizer",
+    )
+    LOCAL_LLM_URL: str = Field(
+        default="http://localhost:11434",
+        description="Base URL for local Ollama instance",
+    )
+
     @field_validator("DEVICE")
     @classmethod
     def validate_device(cls, v: str) -> str:
@@ -141,6 +187,16 @@ def load_config(config_path: Optional[str | Path] = None) -> Config:
         "CONTINUOUS_SPEECH_TIMEOUT_SEC": float,
         "AUTO_SAVE_TRANSCRIPTS": lambda x: str(x).lower() in ("true", "1", "yes"),
         "LOG_LEVEL": str,
+        "ENABLE_API_SERVER": lambda x: str(x).lower() in ("true", "1", "yes"),
+        "API_SERVER_HOST": str,
+        "API_SERVER_PORT": int,
+        "GROQ_API_KEY": str,
+        "OPENAI_API_KEY": str,
+        "GEMINI_API_KEY": str,
+        "CLOUD_STT_PROVIDER": str,
+        "SUMMARIZER_PROVIDER": str,
+        "SUMMARIZER_MODEL": str,
+        "LOCAL_LLM_URL": str,
     }
 
     for key, converter in env_mappings.items():
