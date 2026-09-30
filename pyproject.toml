@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diswhisper"
+version = "0.1.0"
+description = "A free, self-hosted Discord meeting transcriber powered by local Whisper Large-v3"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["discord", "transcriber", "whisper", "faster-whisper", "stt", "speech-to-text", "realtime"]
+authors = [
+    { name = "DisWhisper Contributors" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Chat",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+    "discord.py>=2.3.2",
+    "discord-ext-voice-recv>=0.5.2a179",
+    "faster-whisper>=1.0.0",
+    "ctranslate2>=4.0.0",
+    "numpy>=1.24.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+]
+
+[project.scripts]
+diswhisper = "diswhisper.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["diswhisper*"]
