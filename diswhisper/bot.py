@@ -1,26 +1,26 @@
-"""
-Main Discord Bot Client and Slash Command Handlers for DisWhisper.
-Manages voice lifecycle, connects VoiceRecvClient with DisWhisperSink,
-and bridges audio ingestion with the transcription engine and UI reporter.
-"""
+"""Discord meeting lifecycle, dedicated channel setup, and slash commands."""
 
 from __future__ import annotations
 
 import asyncio
 import datetime
+import io
 import logging
+from contextlib import closing
 from pathlib import Path
 from typing import Optional
 
 import discord
 from discord import app_commands
-from discord.ext import commands, voice_recv
+from discord.ext import commands
 
 from diswhisper.api.server import DisWhisperApiServer
-from diswhisper.audio.buffer import AudioBufferManager, AudioChunk
+from diswhisper.audio.buffer import AudioBufferManager
 from diswhisper.audio.receiver import DisWhisperSink
-from diswhisper.config import Config
+from diswhisper.audio.voice_client import DisWhisperVoiceClient
+from diswhisper.config import Config, save_config_updates
 from diswhisper.exporter.file_logger import TranscriptFileLogger
+from diswhisper.models import activation_updates, get_model, is_downloaded
 from diswhisper.summarizer.engine import MeetingSummarizer
 from diswhisper.transcriber.base import BaseSTTEngine
 from diswhisper.transcriber.factory import create_stt_engine
@@ -31,76 +31,112 @@ logger = logging.getLogger(__name__)
 
 
 class DisWhisperBot(commands.Bot):
-    """
-    Discord bot managing voice channel capture and multi-engine transcription.
-    """
-
-    def __init__(self, config: Config, engine: BaseSTTEngine):
+    def __init__(self, config: Config, engine: BaseSTTEngine, *, managed: bool = False):
         intents = discord.Intents.default()
-        intents.guilds = True
         intents.voice_states = True
-        intents.messages = True
-        intents.message_content = True
-
+        # Slash commands and voice capture do not require privileged message/member intents.
         super().__init__(
             command_prefix="!",
             intents=intents,
             help_command=None,
+            allowed_mentions=discord.AllowedMentions.none(),
         )
-
         self.cfg = config
         self.engine = engine
-
-        # State management per guild
-        self.active_vc: Optional[voice_recv.VoiceRecvClient] = None
-        self.buffer_manager: Optional[AudioBufferManager] = None
-        self.worker: Optional[TranscriptionWorker] = None
-        self.queue: Optional[asyncio.Queue[AudioChunk]] = None
-
+        # One inference pipeline per process. Never let another guild steal its session.
+        self.active_vc = None
+        self.buffer_manager = None
+        self.worker = None
+        self.queue = None
+        self._session_lock = asyncio.Lock()
+        self._configuration_lock = asyncio.Lock()
+        self._idle_audio_task = None
+        self._empty_channel_task = None
+        self.last_transcript_channel = None
         self.reporter = TranscriptReporter(
-            bot=self,
-            channel_name=config.TRANSCRIPT_CHANNEL_NAME,
-            continuous_speech_timeout=config.CONTINUOUS_SPEECH_TIMEOUT_SEC,
+            self, config.TRANSCRIPT_CHANNEL_NAME, config.CONTINUOUS_SPEECH_TIMEOUT_SEC
         )
-        self.file_logger = TranscriptFileLogger()
-        self.start_time = datetime.datetime.now()
-
-        # Embedded API Server for Companion Apps
-        self.api_server: Optional[DisWhisperApiServer] = None
-        if config.ENABLE_API_SERVER:
-            self.api_server = DisWhisperApiServer(
-                bot=self,
-                host=config.API_SERVER_HOST,
-                port=config.API_SERVER_PORT,
-            )
+        self.file_logger = TranscriptFileLogger(config.TRANSCRIPT_DIR)
+        self._owns_api_server = not managed
+        self.start_time = datetime.datetime.now(datetime.timezone.utc)
+        self.api_server = (
+            DisWhisperApiServer(self, config.API_SERVER_HOST, config.API_SERVER_PORT)
+            if config.ENABLE_API_SERVER and not managed
+            else None
+        )
 
     async def setup_hook(self) -> None:
-        """Register slash commands upon bot startup."""
         self._register_commands()
         if self.cfg.GUILD_ID:
-            guild_obj = discord.Object(id=self.cfg.GUILD_ID)
-            self.tree.copy_global_to(guild=guild_obj)
-            await self.tree.sync(guild=guild_obj)
-            logger.info(f"Slash commands synchronized to guild ID {self.cfg.GUILD_ID}.")
+            guild = discord.Object(id=self.cfg.GUILD_ID)
+            self.tree.copy_global_to(guild=guild)
+            await self.tree.sync(guild=guild)
         else:
             await self.tree.sync()
-            logger.info("Global slash commands synchronized.")
-
-        # Start API server for Companion Apps
-        if self.api_server:
+        if self.api_server and self._owns_api_server:
             await self.api_server.start()
 
     async def close(self) -> None:
-        """Gracefully close bot and API server."""
-        if self.api_server:
-            await self.api_server.stop()
-        await super().close()
+        try:
+            await self._cleanup_voice_session(reason="Bot shutting down")
+        finally:
+            if self.api_server and self._owns_api_server:
+                await self.api_server.stop()
+            await super().close()
+
+    async def _provision_guild(self, guild: discord.Guild) -> None:
+        if not self.cfg.AUTO_CREATE_TRANSCRIPT_CHANNEL:
+            return
+        try:
+            await self.reporter.ensure_transcript_channel(guild)
+        except (discord.HTTPException, RuntimeError):
+            logger.warning(
+                "Cannot provision the transcript channel in guild %s. "
+                "Check Manage Channels, View Channel, and Send Messages permissions.",
+                guild.id,
+            )
 
     async def on_ready(self) -> None:
-        logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
         logger.info(
-            f"DisWhisper ready with {self.engine.engine_name} ('{self.engine.model_name}') on '{self.engine.active_device}'."
+            "Logged in as %s; engine=%s model=%s",
+            self.user,
+            self.engine.engine_name,
+            self.engine.model_name,
         )
+        for guild in self.guilds:
+            await self._provision_guild(guild)
+        if self.api_server:
+            await self.api_server.broadcast_event("bot_status", {"status": "online"})
+
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        await self._provision_guild(guild)
+
+    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
+        target = self.reporter.target_channel
+        expected_vc = self.active_vc
+        was_target = bool(target and target.id == channel.id)
+        self.reporter.forget_channel(channel.guild.id, channel.id)
+        if (
+            was_target
+            and self.active_vc
+            and self.active_vc.guild.id == channel.guild.id
+        ):
+            try:
+                destination = await self.reporter.ensure_transcript_channel(
+                    channel.guild
+                )
+                if self.active_vc is expected_vc:
+                    self.reporter.set_target_channel(destination)
+            except (discord.HTTPException, RuntimeError):
+                logger.warning(
+                    "Transcript channel was deleted; local recording continues"
+                )
+
+    async def on_guild_remove(self, guild: discord.Guild) -> None:
+        if self.active_vc and self.active_vc.guild.id == guild.id:
+            await self._cleanup_voice_session(
+                reason="Bot removed from server", publish=False
+            )
 
     async def on_voice_state_update(
         self,
@@ -108,23 +144,81 @@ class DisWhisperBot(commands.Bot):
         before: discord.VoiceState,
         after: discord.VoiceState,
     ) -> None:
-        """Auto-cleanup if bot is disconnected or kicked from voice."""
-        if member.id == self.user.id and before.channel is not None and after.channel is None:
-            logger.info("Bot was disconnected from voice channel. Cleaning up...")
-            await self._cleanup_voice_session()
+        vc = self.active_vc
+        if not vc or member.guild.id != vc.guild.id:
+            return
+        if (
+            self.user
+            and member.id == self.user.id
+            and before.channel
+            and after.channel is None
+        ):
+            await self._cleanup_voice_session(reason="Disconnected from voice")
+            return
+        self._schedule_empty_channel_check()
+
+    def _schedule_empty_channel_check(self) -> None:
+        vc = self.active_vc
+        empty = bool(
+            vc
+            and vc.channel
+            and not any(not member.bot for member in vc.channel.members)
+        )
+        if not empty or self.cfg.AUTO_LEAVE_EMPTY_SEC == 0:
+            if self._empty_channel_task:
+                self._empty_channel_task.cancel()
+                self._empty_channel_task = None
+        elif self._empty_channel_task is None or self._empty_channel_task.done():
+            self._empty_channel_task = asyncio.create_task(
+                self._leave_empty_channel(vc)
+            )
+
+    async def _leave_empty_channel(self, expected_vc) -> None:
+        try:
+            await asyncio.sleep(self.cfg.AUTO_LEAVE_EMPTY_SEC)
+            async with self._session_lock:
+                if (
+                    self.active_vc is expected_vc
+                    and expected_vc.channel
+                    and not any(
+                        not member.bot for member in expected_vc.channel.members
+                    )
+                ):
+                    await self._finish_voice_session(
+                        reason="Everyone left the voice channel"
+                    )
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("Could not finish an empty voice session")
+        finally:
+            if self._empty_channel_task is asyncio.current_task():
+                self._empty_channel_task = None
+
+    async def _flush_idle_audio(self) -> None:
+        while self.buffer_manager:
+            self.buffer_manager.flush_idle()
+            await asyncio.sleep(0.25)
+
+    async def _receiver_stopped(self, expected_vc, error) -> None:
+        async with self._session_lock:
+            if self.active_vc is expected_vc:
+                if error:
+                    logger.error(
+                        "Voice receive failed",
+                        exc_info=(type(error), error, error.__traceback__),
+                    )
+                await self._finish_voice_session(
+                    "Voice stream stopped; meeting transcript preserved"
+                )
 
     async def _handle_transcript(
         self, user_id: int, display_name: str, text: str, timestamp: float
     ) -> None:
-        """Callback invoked by transcription worker for new text."""
-        # 1. Update live Discord channel
-        await self.reporter.post_transcript(user_id, display_name, text, timestamp)
-
-        # 2. Persist to markdown meeting file
-        if self.cfg.AUTO_SAVE_TRANSCRIPTS:
+        # Save first so Discord delivery failures cannot erase recognized speech.
+        if self.file_logger.file_path:
             self.file_logger.log_utterance(display_name, text, timestamp)
-
-        # 3. Broadcast to connected Companion Apps via WebSocket
+        await self.reporter.post_transcript(user_id, display_name, text, timestamp)
         if self.api_server:
             await self.api_server.broadcast_event(
                 "transcript_snippet",
@@ -136,307 +230,487 @@ class DisWhisperBot(commands.Bot):
                 },
             )
 
-    async def _cleanup_voice_session(self) -> Optional[Path]:
-        """Tear down voice client, buffer manager, and finalize transcription worker."""
-        if self.buffer_manager:
-            self.buffer_manager.flush_all()
-
-        if self.worker:
-            await self.worker.stop()
-            self.worker = None
-
-        if self.active_vc and self.active_vc.is_connected():
-            if self.active_vc.is_listening():
-                self.active_vc.stop_listening()
-            await self.active_vc.disconnect(force=True)
-            self.active_vc = None
-
-        self.buffer_manager = None
-        self.reporter.reset_state()
-
-        final_transcript_file = None
-        if self.cfg.AUTO_SAVE_TRANSCRIPTS:
-            final_transcript_file = self.file_logger.end_session()
-
-        return final_transcript_file
-
-    def _register_commands(self) -> None:
-        """Define and attach slash commands."""
-
-        @self.tree.command(name="join", description="Join your active voice channel and begin real-time transcription")
-        async def join_command(interaction: discord.Interaction):
-            await interaction.response.defer(ephemeral=False)
-
-            # Check user voice state
-            if not interaction.user.voice or not interaction.user.voice.channel:
-                await interaction.followup.send(
-                    "❌ You must be in a voice channel to use `/join`.", ephemeral=True
+    async def update_configuration(self, updates: dict) -> None:
+        async with self._configuration_lock:
+            unknown = set(updates) - Config.model_fields.keys()
+            if unknown:
+                raise ValueError(
+                    f"Unknown configuration fields: {', '.join(sorted(unknown))}"
                 )
-                return
-
-            voice_channel = interaction.user.voice.channel
-            guild = interaction.guild
-
-            # Check bot voice permissions
-            perms = voice_channel.permissions_for(guild.me)
-            if not perms.connect or not perms.speak:
-                await interaction.followup.send(
-                    f"❌ I lack permission to join or speak in **{voice_channel.name}**.", ephemeral=True
-                )
-                return
-
-            # Clean existing session if any
-            if self.active_vc and self.active_vc.is_connected():
-                await self._cleanup_voice_session()
-
-            try:
-                # 1. Locate or create transcript channel
-                transcript_channel = await self.reporter.ensure_transcript_channel(
-                    guild=guild,
-                    fallback_channel=interaction.channel if isinstance(interaction.channel, discord.TextChannel) else None,
-                )
-                self.reporter.set_target_channel(transcript_channel)
-
-                # 2. Connect via VoiceRecvClient
-                vc = await voice_channel.connect(cls=voice_recv.VoiceRecvClient)
-                self.active_vc = vc
-
-                # 3. Initialize audio buffer and worker pipeline
-                loop = asyncio.get_running_loop()
-                self.queue = asyncio.Queue[AudioChunk]()
-                self.buffer_manager = AudioBufferManager(
-                    transcription_queue=self.queue,
-                    loop=loop,
-                    chunk_duration_sec=self.cfg.CHUNKING_DURATION_SEC,
-                    silence_threshold=self.cfg.SILENCE_THRESHOLD,
-                )
-
-                self.worker = TranscriptionWorker(
-                    queue=self.queue,
-                    engine=self.engine,
-                    on_transcript=self._handle_transcript,
-                )
-                self.worker.start()
-
-                # 4. Start file logger session
-                if self.cfg.AUTO_SAVE_TRANSCRIPTS:
-                    self.file_logger.start_session(voice_channel.name)
-
-                # 5. Attach AudioSink and start listening
-                sink = DisWhisperSink(self.buffer_manager)
-                vc.listen(sink)
-
-                # Embed response
-                embed = discord.Embed(
-                    title="🎙️ DisWhisper Transcriber Active",
-                    description=f"Joined **{voice_channel.name}** and listening for speech.",
-                    color=discord.Color.green(),
-                    timestamp=datetime.datetime.now(),
-                )
-                embed.add_field(name="Live Transcript Channel", value=f"{transcript_channel.mention}", inline=False)
-                embed.add_field(name="Engine", value=f"`{self.engine.engine_name}`", inline=True)
-                embed.add_field(name="Model", value=f"`{self.engine.model_name}`", inline=True)
-                embed.add_field(name="Inference Device", value=f"`{self.engine.active_device} ({self.engine.active_compute_type})`", inline=True)
-                embed.add_field(name="Chunk Interval", value=f"`{self.cfg.CHUNKING_DURATION_SEC}s`", inline=True)
-                embed.set_footer(text="Speak naturally. Silence is automatically filtered.")
-
-                await interaction.followup.send(embed=embed)
-
-            except Exception as e:
-                logger.error(f"Failed to join voice channel: {e}", exc_info=True)
-                await self._cleanup_voice_session()
-                await interaction.followup.send(f"❌ Failed to join voice channel: `{e}`")
-
-        @self.tree.command(name="leave", description="Disconnect from voice channel and finalize transcript export")
-        async def leave_command(interaction: discord.Interaction):
-            await interaction.response.defer(ephemeral=False)
-
-            if not self.active_vc or not self.active_vc.is_connected():
-                await interaction.followup.send("⚠️ DisWhisper is not currently in any voice channel.", ephemeral=True)
-                return
-
-            channel_name = self.active_vc.channel.name if self.active_vc.channel else "Voice Channel"
-            transcript_file = await self._cleanup_voice_session()
-
-            embed = discord.Embed(
-                title="⏹️ DisWhisper Disconnected",
-                description=f"Left **{channel_name}** and completed transcription session.",
-                color=discord.Color.orange(),
-                timestamp=datetime.datetime.now(),
+            candidate = Config.model_validate({**self.cfg.model_dump(), **updates})
+            changed = {
+                key
+                for key in updates
+                if getattr(candidate, key) != getattr(self.cfg, key)
+            }
+            engine_fields = {
+                "STT_ENGINE",
+                "WHISPER_MODEL_SIZE",
+                "SENSEVOICE_MODEL_ID",
+                "VOSK_MODEL_ID",
+                "DEVICE",
+                "COMPUTE_TYPE",
+                "CUDA_LIBRARY_DIR",
+                "LANGUAGE",
+                "ENABLE_RICH_EVENTS",
+                "CLOUD_STT_PROVIDER",
+                "LOCAL_MODEL_DIR",
+            }
+            if candidate.STT_ENGINE in ("cloud", "groq", "openai"):
+                engine_fields.update({"GROQ_API_KEY", "OPENAI_API_KEY"})
+            # Model loading must not block Discord heartbeats or the companion API.
+            new_engine = (
+                await asyncio.to_thread(create_stt_engine, candidate)
+                if engine_fields & changed
+                else None
             )
-
-            # If transcript file was generated, upload it
-            if transcript_file and transcript_file.is_file():
-                file_size = transcript_file.stat().st_size
-                if file_size > 0:
-                    discord_file = discord.File(str(transcript_file), filename=transcript_file.name)
-                    embed.add_field(name="Session Transcript", value=f"Attached: `{transcript_file.name}`", inline=False)
-                    await interaction.followup.send(embed=embed, file=discord_file)
-                    return
-
-            await interaction.followup.send(embed=embed)
-
-        @self.tree.command(name="status", description="Display DisWhisper engine health, hardware usage, and metrics")
-        async def status_command(interaction: discord.Interaction):
-            uptime = datetime.datetime.now() - self.start_time
-            uptime_str = str(uptime).split(".")[0]
-
-            embed = discord.Embed(
-                title="📊 DisWhisper System Status",
-                color=discord.Color.blue(),
-                timestamp=datetime.datetime.now(),
+            self.cfg = await asyncio.to_thread(save_config_updates, self.cfg, updates)
+            self.reporter.channel_name = self.cfg.TRANSCRIPT_CHANNEL_NAME
+            self.reporter.continuous_speech_timeout = (
+                self.cfg.CONTINUOUS_SPEECH_TIMEOUT_SEC
             )
-            embed.add_field(name="Uptime", value=f"`{uptime_str}`", inline=True)
-            embed.add_field(name="Engine", value=f"`{self.engine.engine_name}`", inline=True)
-            embed.add_field(name="Model", value=f"`{self.engine.model_name}`", inline=True)
-            embed.add_field(
-                name="Hardware Device",
-                value=f"`{self.engine.active_device}` (`{self.engine.active_compute_type}`)",
-                inline=True,
-            )
-
-            vc_status = self.active_vc.channel.name if (self.active_vc and self.active_vc.is_connected()) else "Disconnected"
-            embed.add_field(name="Voice Channel", value=f"`{vc_status}`", inline=True)
-
-            q_size = self.queue.qsize() if self.queue else 0
-            embed.add_field(name="Queue Depth", value=f"`{q_size} chunks`", inline=True)
-
-            active_speakers = self.buffer_manager.active_user_count if self.buffer_manager else 0
-            embed.add_field(name="Active Stream Buffers", value=f"`{active_speakers} users`", inline=True)
-
-            rich_status = "Enabled (😂 👏 🎶)" if self.cfg.ENABLE_RICH_EVENTS else "Disabled"
-            embed.add_field(name="Rich Event Badges", value=f"`{rich_status}`", inline=True)
-
-            # GPU Memory if CUDA
-            if self.engine.active_device == "cuda":
-                try:
-                    import torch
-                    if torch.cuda.is_available():
-                        allocated = torch.cuda.memory_allocated() / (1024**2)
-                        reserved = torch.cuda.memory_reserved() / (1024**2)
-                        embed.add_field(name="GPU Memory", value=f"`{allocated:.0f}MB / {reserved:.0f}MB`", inline=True)
-                except ImportError:
-                    pass
-
-            await interaction.response.send_message(embed=embed)
-
-        @self.tree.command(name="engine", description="View or switch the active speech-to-text engine (SenseVoice / Whisper)")
-        @app_commands.describe(
-            target_engine="Select STT engine to switch to (leave empty to view current status)"
-        )
-        @app_commands.choices(
-            target_engine=[
-                app_commands.Choice(name="SenseVoice (Alibaba - <100ms ultra-low latency & emotions)", value="sensevoice"),
-                app_commands.Choice(name="Whisper (Large-v3 - 99+ languages & high accuracy)", value="whisper"),
-            ]
-        )
-        async def engine_command(interaction: discord.Interaction, target_engine: Optional[str] = None):
-            if not target_engine:
-                embed = discord.Embed(
-                    title="⚙️ Current STT Engine",
-                    color=discord.Color.purple(),
-                    timestamp=datetime.datetime.now(),
+            if self.buffer_manager:
+                self.buffer_manager.update_settings(
+                    self.cfg.CHUNKING_DURATION_SEC, self.cfg.SILENCE_THRESHOLD
                 )
-                embed.add_field(name="Engine", value=f"**{self.engine.engine_name}**", inline=True)
-                embed.add_field(name="Model", value=f"`{self.engine.model_name}`", inline=True)
-                embed.add_field(name="Device", value=f"`{self.engine.active_device}`", inline=True)
-                embed.add_field(
-                    name="How to switch",
-                    value="Use `/engine target_engine:SenseVoice` or `/engine target_engine:Whisper` to switch on the fly.",
-                    inline=False,
-                )
-                await interaction.response.send_message(embed=embed)
-                return
-
-            await interaction.response.defer(ephemeral=False)
-            try:
-                logger.info(f"Switching STT engine to '{target_engine}'...")
-                old_engine_name = self.engine.engine_name
-
-                # Instantiate new engine using factory
-                new_engine = create_stt_engine(self.cfg, engine_type_override=target_engine)
-
-                # Hot-swap engine in bot and worker
+            if new_engine:
                 self.engine = new_engine
                 if self.worker:
                     self.worker.engine = new_engine
-
-                embed = discord.Embed(
-                    title="🔄 STT Engine Switched",
-                    description=f"Successfully transitioned from **{old_engine_name}** to **{new_engine.engine_name}**.",
-                    color=discord.Color.green(),
-                    timestamp=datetime.datetime.now(),
-                )
-                embed.add_field(name="Active Model", value=f"`{new_engine.model_name}`", inline=True)
-                embed.add_field(name="Hardware Target", value=f"`{new_engine.active_device} ({new_engine.active_compute_type})`", inline=True)
-
-                if "sensevoice" in target_engine.lower():
-                    embed.add_field(
-                        name="SenseVoice Features",
-                        value="• < 100ms ultra-low latency\n• Emotion & event tags (😂 👏 🎶)\n• Fast on CPU / CUDA",
-                        inline=False,
+                if self.api_server:
+                    await self.api_server.broadcast_event(
+                        "engine_switched",
+                        {
+                            "engine_name": new_engine.engine_name,
+                            "model_name": new_engine.model_name,
+                            "device": new_engine.active_device,
+                        },
                     )
-                else:
-                    embed.add_field(
-                        name="Whisper Features",
-                        value="• 99+ Languages supported (including Russian)\n• CTranslate2 CUDA float16 acceleration",
-                        inline=False,
-                    )
+            if "AUTO_LEAVE_EMPTY_SEC" in changed and self._empty_channel_task:
+                self._empty_channel_task.cancel()
+                self._empty_channel_task = None
+            self._schedule_empty_channel_check()
 
-                await interaction.followup.send(embed=embed)
-            except Exception as e:
-                logger.error(f"Failed to switch engine to '{target_engine}': {e}", exc_info=True)
-                await interaction.followup.send(f"❌ Failed to switch engine: `{e}`")
-
-        @self.tree.command(name="export", description="Export the current meeting transcript without leaving")
-        async def export_command(interaction: discord.Interaction):
-            if not self.file_logger.file_path or not self.file_logger.file_path.is_file():
-                await interaction.response.send_message(
-                    "⚠️ No active transcript session to export.", ephemeral=True
+    async def switch_engine(self, engine: str, model_id: Optional[str] = None) -> None:
+        if model_id:
+            model = get_model(model_id)
+            if model.category == "local_stt" and not await asyncio.to_thread(
+                is_downloaded, self.cfg, model
+            ):
+                raise ValueError(
+                    "Download this model in the companion before activating it"
                 )
-                return
+            updates = activation_updates(self.cfg, model)
+        else:
+            updates = {"STT_ENGINE": engine}
+            if engine in ("groq", "openai"):
+                updates["CLOUD_STT_PROVIDER"] = engine
+        await self.update_configuration(updates)
 
-            current_file = self.file_logger.file_path
-            discord_file = discord.File(str(current_file), filename=f"live_{current_file.name}")
-            await interaction.response.send_message(
-                content="📄 Current session transcript snapshot:",
-                file=discord_file,
-                ephemeral=False,
+    async def _cleanup_voice_session(
+        self, reason: str = "Meeting finished", publish: bool = True
+    ) -> Optional[Path]:
+        async with self._session_lock:
+            return await self._finish_voice_session(reason, publish)
+
+    async def _finish_voice_session(
+        self, reason: str, publish: bool = True
+    ) -> Optional[Path]:
+        vc = self.active_vc
+        if vc is None and self.worker is None and self.file_logger.file_path is None:
+            self.reporter.set_target_channel(None)
+            return None
+        self.active_vc = None  # Prevent disconnect events from finalizing this session a second time.
+        self.last_transcript_channel = None
+        for task in (self._idle_audio_task, self._empty_channel_task):
+            if task and task is not asyncio.current_task():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+        self._idle_audio_task = None
+        self._empty_channel_task = None
+        if self.buffer_manager:
+            self.buffer_manager.close()
+        if vc and vc.is_listening():
+            vc.stop_listening()
+        # Allow thread-safe flush callbacks to enter the queue before its drain.
+        await asyncio.sleep(0)
+        if self.worker:
+            await self.worker.stop()
+            self.worker = None
+        self.buffer_manager = None
+        self.queue = None
+        path = self.file_logger.end_session()
+        try:
+            if vc and vc.is_connected():
+                await vc.disconnect(force=True)
+        except discord.DiscordException:
+            logger.exception("Voice disconnect failed after transcript finalization")
+        if publish and self.cfg.AUTO_POST_TRANSCRIPTS and vc:
+            try:
+                channel = self.reporter.target_channel
+                if channel is None or channel.guild.id != vc.guild.id:
+                    channel = await self.reporter.ensure_transcript_channel(vc.guild)
+                await self._publish_transcript(channel, path, reason)
+                self.last_transcript_channel = channel
+            except (discord.HTTPException, RuntimeError, OSError):
+                logger.exception(
+                    "Could not publish completed transcript; the local file is preserved"
+                )
+        self.reporter.set_target_channel(None)
+        if self.api_server:
+            await self.api_server.broadcast_event(
+                "session_finished",
+                {"reason": reason, "filename": path.name if path else None},
             )
+        return path
 
-        @self.tree.command(name="summarize", description="Generate an AI executive summary and action items for this meeting")
-        async def summarize_command(interaction: discord.Interaction):
-            await interaction.response.defer(ephemeral=False)
+    async def _publish_transcript(
+        self, channel: discord.TextChannel, path: Optional[Path], reason: str
+    ) -> None:
+        embed = discord.Embed(
+            title="📄 Meeting transcript",
+            description=reason,
+            color=discord.Color.blue(),
+            timestamp=discord.utils.utcnow(),
+        )
+        embed.add_field(
+            name="Recognized utterances", value=str(self.file_logger.total_utterances)
+        )
+        if path and path.is_file():
+            # Freeze snapshots; the active log may keep growing while Discord uploads.
+            content = (
+                path.read_bytes()
+                if path.stat().st_size <= channel.guild.filesize_limit
+                else None
+            )
+            if content is not None and len(content) <= channel.guild.filesize_limit:
+                with closing(
+                    discord.File(io.BytesIO(content), filename=path.name)
+                ) as file:
+                    await channel.send(
+                        embed=embed,
+                        file=file,
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
+                return
+            embed.add_field(
+                name="Export",
+                value="The transcript exceeds this server's upload limit. "
+                "It is saved locally and available in the companion.",
+                inline=False,
+            )
+        else:
+            embed.add_field(
+                name="Export",
+                value="Live messages are retained above. Enable automatic saving "
+                "in the companion to attach a Markdown file.",
+                inline=False,
+            )
+        await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
-            if not self.file_logger.file_path or not self.file_logger.file_path.is_file():
+    def _can_control_session(self, interaction: discord.Interaction) -> bool:
+        vc = self.active_vc
+        if not interaction.guild or not vc or vc.guild.id != interaction.guild.id:
+            return False
+        voice = getattr(interaction.user, "voice", None)
+        return bool(
+            interaction.user.guild_permissions.manage_guild
+            or (
+                voice
+                and voice.channel
+                and vc.channel
+                and voice.channel.id == vc.channel.id
+            )
+        )
+
+    async def _require_session(self, interaction: discord.Interaction) -> bool:
+        if self._can_control_session(interaction):
+            return True
+        await interaction.followup.send(
+            "Join my active voice channel to control this meeting, "
+            "or ask a member with Manage Server permission.",
+            ephemeral=True,
+        )
+        return False
+
+    def _register_commands(self) -> None:
+        @self.tree.error
+        async def command_error(
+            interaction: discord.Interaction, error: app_commands.AppCommandError
+        ):
+            logger.error(
+                "Slash command failed",
+                exc_info=(type(error), error, error.__traceback__),
+            )
+            message = "I couldn't complete that command. Check my channel permissions and the bot log."
+            if interaction.response.is_done():
+                await interaction.followup.send(message, ephemeral=True)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
+
+        @self.tree.command(
+            name="join",
+            description="Join your voice channel and start a meeting transcript",
+        )
+        @app_commands.guild_only()
+        async def join_command(interaction: discord.Interaction):
+            await interaction.response.defer(ephemeral=True)
+            voice = getattr(interaction.user, "voice", None)
+            if not voice or not isinstance(voice.channel, discord.VoiceChannel):
                 await interaction.followup.send(
-                    "⚠️ No active transcript session found to summarize. Start a meeting with `/join` first.",
+                    "Join a regular voice channel first, then use `/join`.",
                     ephemeral=True,
                 )
                 return
-
-            try:
-                with open(self.file_logger.file_path, "r", encoding="utf-8") as f:
-                    transcript_text = f.read()
-
-                summarizer = MeetingSummarizer(
-                    provider=self.cfg.SUMMARIZER_PROVIDER,
-                    cloud_platform=self.cfg.CLOUD_STT_PROVIDER,
-                    api_key=self.cfg.GROQ_API_KEY if self.cfg.CLOUD_STT_PROVIDER == "groq" else self.cfg.OPENAI_API_KEY,
-                    model_name=self.cfg.SUMMARIZER_MODEL,
-                    local_llm_url=self.cfg.LOCAL_LLM_URL,
+            channel = voice.channel
+            permissions = channel.permissions_for(interaction.guild.me)
+            if not permissions.view_channel or not permissions.connect:
+                await interaction.followup.send(
+                    "I need View Channel and Connect permissions in your voice channel.",
+                    ephemeral=True,
                 )
+                return
+            async with self._session_lock:
+                if self.active_vc or self.worker:
+                    await interaction.followup.send(
+                        "I'm already transcribing a meeting. Finish it with `/leave` before starting another.",
+                        ephemeral=True,
+                    )
+                    return
+                try:
+                    destination = await self.reporter.ensure_transcript_channel(
+                        interaction.guild
+                    )
+                    self.reporter.set_target_channel(destination)
+                    vc = await channel.connect(
+                        cls=DisWhisperVoiceClient, self_deaf=False
+                    )
+                    self.active_vc = vc
+                    self.queue = asyncio.Queue(maxsize=128)
+                    self.buffer_manager = AudioBufferManager(
+                        self.queue,
+                        asyncio.get_running_loop(),
+                        self.cfg.CHUNKING_DURATION_SEC,
+                        self.cfg.SILENCE_THRESHOLD,
+                    )
+                    self.worker = TranscriptionWorker(
+                        self.queue, self.engine, self._handle_transcript
+                    )
+                    if self.cfg.AUTO_SAVE_TRANSCRIPTS:
+                        self.file_logger.start_session(
+                            channel.name, self.engine.engine_name
+                        )
+                    self.worker.start()
+                    loop = asyncio.get_running_loop()
 
-                summary = await summarizer.summarize_transcript(transcript_text)
+                    def receiver_stopped(error):
+                        if not loop.is_closed():
+                            loop.call_soon_threadsafe(
+                                lambda: asyncio.create_task(
+                                    self._receiver_stopped(vc, error)
+                                )
+                            )
 
-                # Split message if exceeds Discord 2000 character limit
-                if len(summary) <= 1950:
-                    await interaction.followup.send(summary)
-                else:
-                    chunks = [summary[i : i + 1900] for i in range(0, len(summary), 1900)]
-                    for chunk in chunks:
-                        await interaction.followup.send(chunk)
+                    vc.listen(
+                        DisWhisperSink(self.buffer_manager), after=receiver_stopped
+                    )
+                    self._idle_audio_task = asyncio.create_task(
+                        self._flush_idle_audio()
+                    )
+                    await destination.send(
+                        f"🎙️ **Meeting started in {channel.mention}**\n"
+                        f"Transcribing with **{self.engine.engine_name}**. Live speech and the completed "
+                        "transcript will appear here. Use `/leave` to finish.",
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
+                    await interaction.followup.send(
+                        f"Listening in {channel.mention}. Transcripts: {destination.mention}",
+                        ephemeral=True,
+                    )
+                    self._schedule_empty_channel_check()
+                except (RuntimeError, discord.Forbidden) as error:
+                    await self._finish_voice_session("Meeting could not start")
+                    await interaction.followup.send(str(error), ephemeral=True)
+                except Exception:
+                    logger.exception("Could not start voice transcription")
+                    await self._finish_voice_session("Meeting could not start")
+                    await interaction.followup.send(
+                        "Could not start transcription. Check voice permissions, "
+                        "the active model, and the bot log.",
+                        ephemeral=True,
+                    )
 
-            except Exception as e:
-                logger.error(f"Error generating AI summary: {e}", exc_info=True)
-                await interaction.followup.send(f"❌ Failed to generate summary: `{e}`")
+        @self.tree.command(
+            name="leave",
+            description="Finish the meeting and share its transcript in the dedicated channel",
+        )
+        @app_commands.guild_only()
+        async def leave_command(interaction: discord.Interaction):
+            await interaction.response.defer(ephemeral=True)
+            async with self._session_lock:
+                if not await self._require_session(interaction):
+                    return
+                path = await self._finish_voice_session("Meeting finished with /leave")
+                posted = self.last_transcript_channel
+            if posted:
+                message = f"Meeting finished. Transcript shared in {posted.mention}."
+            elif not self.cfg.AUTO_POST_TRANSCRIPTS:
+                message = "Meeting finished. Automatic transcript posting is disabled."
+            elif path and path.is_file():
+                message = "Meeting finished and saved locally. I couldn't post the export; check my channel and attachment permissions."
+            else:
+                message = (
+                    "Meeting finished. Check the bot log if an export was expected."
+                )
+            await interaction.followup.send(message, ephemeral=True)
+
+        @self.tree.command(
+            name="export",
+            description="Share a snapshot of the current transcript in the dedicated channel",
+        )
+        @app_commands.guild_only()
+        async def export_command(interaction: discord.Interaction):
+            await interaction.response.defer(ephemeral=True)
+            async with self._session_lock:
+                if not await self._require_session(interaction):
+                    return
+                path = self.file_logger.file_path
+                if not path or not path.is_file():
+                    await interaction.followup.send(
+                        "Enable automatic transcript saving before starting the meeting.",
+                        ephemeral=True,
+                    )
+                    return
+                destination = await self.reporter.ensure_transcript_channel(
+                    interaction.guild
+                )
+                await self._publish_transcript(
+                    destination, path, "Snapshot of the current meeting"
+                )
+            await interaction.followup.send(
+                f"Snapshot shared in {destination.mention}.", ephemeral=True
+            )
+
+        @self.tree.command(
+            name="status",
+            description="Show the active transcription engine and meeting health",
+        )
+        @app_commands.guild_only()
+        async def status_command(interaction: discord.Interaction):
+            embed = discord.Embed(title="DisWhisper status", color=discord.Color.blue())
+            embed.add_field(name="Engine", value=self.engine.engine_name)
+            embed.add_field(name="Model", value=self.engine.model_name)
+            embed.add_field(
+                name="Device",
+                value=f"{self.engine.active_device} ({self.engine.active_compute_type})",
+            )
+            vc = self.active_vc
+            if vc and vc.guild.id == interaction.guild.id:
+                embed.add_field(
+                    name="Meeting",
+                    value=vc.channel.mention if vc.channel else "Disconnecting",
+                )
+                embed.add_field(
+                    name="Queued audio",
+                    value=str(self.queue.qsize() if self.queue else 0),
+                )
+            else:
+                embed.add_field(
+                    name="Meeting",
+                    value="Busy in another server" if vc else "Ready — use /join",
+                )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        @self.tree.command(
+            name="engine",
+            description="View or switch the speech provider: SenseVoice, Whisper, Vosk, or cloud",
+        )
+        @app_commands.guild_only()
+        @app_commands.choices(
+            target_engine=[
+                app_commands.Choice(name="SenseVoice", value="sensevoice"),
+                app_commands.Choice(name="Whisper", value="whisper"),
+                app_commands.Choice(name="Vosk (offline CPU)", value="vosk"),
+                app_commands.Choice(name="Groq Cloud", value="groq"),
+                app_commands.Choice(name="OpenAI Cloud", value="openai"),
+            ]
+        )
+        async def engine_command(
+            interaction: discord.Interaction, target_engine: Optional[str] = None
+        ):
+            await interaction.response.defer(ephemeral=True)
+            if target_engine:
+                if self.active_vc:
+                    if not await self._require_session(interaction):
+                        return
+                elif not interaction.user.guild_permissions.manage_guild:
+                    await interaction.followup.send(
+                        "Manage Server permission is required to change providers before a meeting.",
+                        ephemeral=True,
+                    )
+                    return
+                try:
+                    await self.switch_engine(target_engine)
+                except ValueError as error:
+                    await interaction.followup.send(str(error), ephemeral=True)
+                    return
+            await interaction.followup.send(
+                f"Active provider: **{self.engine.engine_name}** · `{self.engine.model_name}` · "
+                f"`{self.engine.active_device}`. Choose and download specific models in the companion.",
+                ephemeral=True,
+            )
+
+        @self.tree.command(
+            name="summarize",
+            description="Share AI meeting notes in the dedicated transcript channel",
+        )
+        @app_commands.guild_only()
+        async def summarize_command(interaction: discord.Interaction):
+            await interaction.response.defer(ephemeral=True)
+            async with self._session_lock:
+                if not await self._require_session(interaction):
+                    return
+                path = self.file_logger.file_path
+                if (
+                    not path
+                    or not path.is_file()
+                    or self.file_logger.total_utterances == 0
+                ):
+                    await interaction.followup.send(
+                        "No recognized speech to summarize yet. Enable automatic saving and start speaking.",
+                        ephemeral=True,
+                    )
+                    return
+                text = path.read_text(encoding="utf-8")
+                destination = await self.reporter.ensure_transcript_channel(
+                    interaction.guild
+                )
+                cfg = self.cfg.model_copy(deep=True)
+            summarizer = MeetingSummarizer(
+                provider=cfg.SUMMARIZER_PROVIDER,
+                cloud_platform=cfg.CLOUD_STT_PROVIDER,
+                api_key=cfg.GROQ_API_KEY
+                if cfg.CLOUD_STT_PROVIDER == "groq"
+                else cfg.OPENAI_API_KEY,
+                model_name=cfg.LOCAL_SUMMARIZER_MODEL
+                if cfg.SUMMARIZER_PROVIDER == "local"
+                else cfg.SUMMARIZER_MODEL,
+                local_llm_url=cfg.LOCAL_LLM_URL,
+            )
+            summary = await summarizer.summarize_transcript(text)
+            if summary.startswith(("❌", "⚠️")):
+                await interaction.followup.send(summary, ephemeral=True)
+                return
+            with closing(
+                discord.File(
+                    io.BytesIO(summary.encode("utf-8")), filename=f"summary_{path.name}"
+                )
+            ) as file:
+                await destination.send(
+                    "📝 **AI meeting notes**",
+                    file=file,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            await interaction.followup.send(
+                f"Meeting notes shared in {destination.mention}.", ephemeral=True
+            )

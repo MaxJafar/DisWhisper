@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 echo "=============================================="
 echo "  DisWhisper: Local Real-Time Transcriber     "
@@ -13,4 +14,7 @@ if [ ! -f .env ] && [ ! -f config.json ]; then
     exit 1
 fi
 
-python3 -m diswhisper.main
+if [ -x .venv/bin/python ]; then
+    exec .venv/bin/python -m diswhisper.main "$@"
+fi
+exec python3 -m diswhisper.main "$@"

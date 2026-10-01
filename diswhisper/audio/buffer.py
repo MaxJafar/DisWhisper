@@ -132,7 +132,7 @@ class UserAudioStream:
                     user_id=self.user_id,
                     display_name=self.display_name,
                     audio=full_array,
-                    timestamp=time.time(),
+                    timestamp=self.last_packet_time,
                     duration_sec=duration,
                     rms=rms,
                 )
@@ -159,6 +159,7 @@ class AudioBufferManager:
 
         self._streams: Dict[int, UserAudioStream] = {}
         self._lock = threading.Lock()
+        self._closed = False
 
     def get_or_create_stream(self, user_id: int, display_name: str) -> UserAudioStream:
         with self._lock:
@@ -173,7 +174,9 @@ class AudioBufferManager:
                 self._streams[user_id].update_display_name(display_name)
             return self._streams[user_id]
 
-    def process_pcm_packet(self, user_id: int, display_name: str, pcm_bytes: bytes) -> None:
+    def process_pcm_packet(
+        self, user_id: int, display_name: str, pcm_bytes: bytes
+    ) -> None:
         """
         Called by VoiceReceiver on audio packet reception.
         Converts PCM bytes to 16kHz mono float32, feeds to stream, and queues chunks.
@@ -182,24 +185,83 @@ class AudioBufferManager:
         if samples.size == 0:
             return
 
-        stream = self.get_or_create_stream(user_id, display_name)
-        chunks = stream.feed_samples(samples)
-
-        for chunk in chunks:
-            self._dispatch_chunk(chunk)
+        # Close/flush cannot race a packet into the queue after shutdown starts.
+        with self._lock:
+            if self._closed:
+                return
+            stream = self._streams.get(user_id)
+            if stream is None:
+                stream = UserAudioStream(
+                    user_id,
+                    display_name,
+                    self.chunk_duration_sec,
+                    self.silence_threshold,
+                )
+                self._streams[user_id] = stream
+            stream.update_display_name(display_name)
+            for chunk in stream.feed_samples(samples):
+                self._dispatch_chunk(chunk)
 
     def _dispatch_chunk(self, chunk: AudioChunk) -> None:
         """Push chunk into asyncio queue safely from any thread."""
         try:
-            self.loop.call_soon_threadsafe(self.queue.put_nowait, chunk)
+            self.loop.call_soon_threadsafe(self._enqueue_chunk, chunk)
         except Exception as e:
             logger.error(f"Failed to queue audio chunk: {e}")
+
+    def _enqueue_chunk(self, chunk: AudioChunk) -> None:
+        try:
+            self.queue.put_nowait(chunk)
+        except asyncio.QueueFull:
+            logger.warning(
+                "Transcription queue is full; dropping audio from %s",
+                chunk.display_name,
+            )
+
+    def flush_idle(self, timeout_sec: float = 1.0) -> None:
+        """Deliver short utterances after a pause instead of waiting for a full chunk."""
+        with self._lock:
+            if self._closed:
+                return
+            now = time.time()
+            for user_id, stream in list(self._streams.items()):
+                if now - stream.last_packet_time >= timeout_sec:
+                    chunk = stream.flush(min_duration_sec=0.35)
+                    if chunk:
+                        self._dispatch_chunk(chunk)
+                if now - stream.last_packet_time > 30:
+                    del self._streams[user_id]
+
+    def update_settings(
+        self, chunk_duration_sec: float, silence_threshold: float
+    ) -> None:
+        with self._lock:
+            self.chunk_duration_sec = chunk_duration_sec
+            self.silence_threshold = silence_threshold
+            for stream in self._streams.values():
+                with stream._lock:
+                    stream.chunk_duration_sec = chunk_duration_sec
+                    stream.target_samples = int(
+                        WHISPER_SAMPLE_RATE * chunk_duration_sec
+                    )
+                    stream.silence_threshold = silence_threshold
+
+    def close(self) -> None:
+        """Stop accepting packets and flush the final speech exactly once."""
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            for stream in self._streams.values():
+                chunk = stream.flush(min_duration_sec=0.35)
+                if chunk:
+                    self._dispatch_chunk(chunk)
 
     def flush_all(self) -> None:
         """Flush remaining buffered audio for all active users."""
         with self._lock:
             for stream in self._streams.values():
-                chunk = stream.flush()
+                chunk = stream.flush(min_duration_sec=0.35)
                 if chunk:
                     self._dispatch_chunk(chunk)
 

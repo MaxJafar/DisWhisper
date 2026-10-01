@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Callable, Coroutine, Optional, Any
+from typing import Any, Callable, Coroutine, Optional
 
 from diswhisper.audio.buffer import AudioChunk
 from diswhisper.transcriber.base import BaseSTTEngine
@@ -46,9 +46,10 @@ class TranscriptionWorker:
         logger.info("Transcription worker started.")
 
     async def stop(self) -> None:
-        """Stop worker and cancel pending task."""
+        """Drain accepted audio before stopping so the export includes final speech."""
         if not self._running:
             return
+        await self.queue.join()
         self._running = False
         if self._task and not self._task.done():
             self._task.cancel()
@@ -56,6 +57,7 @@ class TranscriptionWorker:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        self._task = None
         logger.info("Transcription worker stopped.")
 
     async def _worker_loop(self) -> None:
@@ -73,7 +75,12 @@ class TranscriptionWorker:
                 start_inference = time.time()
 
                 # Run heavy CTranslate2 inference in a thread worker
-                text, detected_lang = await asyncio.to_thread(self.engine.transcribe, chunk.audio)
+                engine = self.engine
+                async_transcribe = getattr(engine, "transcribe_async", None)
+                if async_transcribe is not None:
+                    text, detected_lang = await async_transcribe(chunk.audio)
+                else:
+                    text, detected_lang = await asyncio.to_thread(engine.transcribe, chunk.audio)
 
                 inference_duration = time.time() - start_inference
                 total_latency = time.time() - chunk.timestamp

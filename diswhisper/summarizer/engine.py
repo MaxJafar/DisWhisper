@@ -6,7 +6,6 @@ to generate structured executive meeting notes, action items, and decisions.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Optional
 
@@ -49,9 +48,8 @@ class MeetingSummarizer:
         self.provider = provider.lower().strip()
         self.cloud_platform = cloud_platform.lower().strip()
         self.api_key = api_key or ""
-        self.model_name = model_name or (
-            "llama-3.3-70b-versatile" if self.cloud_platform == "groq" else "gpt-4o-mini"
-        )
+        self.model_name = model_name or ("llama3.2:3b" if self.provider == "local" else
+            "llama-3.3-70b-versatile" if self.cloud_platform == "groq" else "gpt-4o-mini")
         self.local_llm_url = local_llm_url.rstrip("/")
 
     async def summarize_transcript(self, transcript_text: str) -> str:

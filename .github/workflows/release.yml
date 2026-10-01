@@ -1,0 +1,43 @@
+name: Windows release
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  portable:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build and test the portable package
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+      - name: Smoke-test the frozen service
+        shell: pwsh
+        run: python scripts/smoke_release.py dist/DisWhisper-0.2.0-windows-x64/backend/diswhisper-backend.exe
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: DisWhisper-windows-x64
+          path: |
+            dist/*.zip
+            dist/*.sha256
+      - name: Publish a tagged release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view ${{ github.ref_name }} --repo ${{ github.repository }}
+          if ($LASTEXITCODE -ne 0) {
+            gh release create ${{ github.ref_name }} --repo ${{ github.repository }} --verify-tag --generate-notes
+            if ($LASTEXITCODE -ne 0) { throw "Release creation failed." }
+          }
+          gh release upload ${{ github.ref_name }} dist/*.zip dist/*.sha256 --repo ${{ github.repository }} --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Release upload failed." }

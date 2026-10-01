@@ -1,0 +1,35 @@
+<Page x:Class="DisWhisper.Companion.Views.TranscriptsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:DisWhisper.Companion.Models" NavigationCacheMode="Required">
+    <Grid RowSpacing="20">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid><StackPanel><TextBlock Text="Transcripts" Style="{StaticResource PageTitleStyle}"/><TextBlock Text="Every conversation, saved where you can find it." Style="{StaticResource PageDescriptionStyle}"/></StackPanel><Button Content="Refresh" Click="Refresh_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource QuietActionStyle}"/></Grid>
+        <InfoBar x:Name="Notice" Grid.Row="1" IsOpen="False"/>
+        <Grid Grid.Row="2" ColumnSpacing="18">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border Style="{StaticResource CardStyle}" Padding="14">
+                <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <AutoSuggestBox x:Name="SearchBox" PlaceholderText="Find a meeting…" TextChanged="Search_Changed" QueryIcon="Find"/>
+                    <ListView x:Name="TranscriptList" Grid.Row="1" SelectionChanged="Transcript_Selected" SelectionMode="Single">
+                        <ListView.ItemTemplate><DataTemplate x:DataType="models:TranscriptItem"><StackPanel Padding="2,10" Spacing="5"><TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{x:Bind Caption}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></StackPanel></DataTemplate></ListView.ItemTemplate>
+                    </ListView>
+                    <Button Grid.Row="2" Content="Open transcript folder ↗" Click="Folder_Click" HorizontalAlignment="Stretch" Style="{StaticResource QuietActionStyle}"/>
+                </Grid>
+            </Border>
+            <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                <Grid RowSpacing="16"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <StackPanel Spacing="10"><TextBlock x:Name="PreviewTitle" Text="Your transcript library" Style="{StaticResource SectionTitleStyle}"/><StackPanel Orientation="Horizontal" Spacing="8"><Button x:Name="CopyButton" Content="Copy" IsEnabled="False" Click="Copy_Click"/><Button x:Name="OpenButton" Content="Open file ↗" IsEnabled="False" Click="Open_Click"/><Button x:Name="NotesButton" Content="Make meeting notes" IsEnabled="False" Click="Notes_Click"/></StackPanel></StackPanel>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><Grid>
+                        <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Margin="20,60">
+                            <FontIcon Glyph="&#xE8A5;" FontSize="42" Foreground="{ThemeResource DisWhisperBrandTextBrush}"/>
+                            <TextBlock Text="A conversation worth keeping." FontSize="20" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap"/>
+                            <TextBlock Text="Start a meeting with /join in Discord. Your transcript is saved automatically and will appear here." TextAlignment="Center" TextWrapping="Wrap" MaxWidth="310" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                        <RichTextBlock x:Name="Preview" IsTextSelectionEnabled="True" Visibility="Collapsed" TextWrapping="Wrap" FontSize="14"/>
+                    </Grid></ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Page>

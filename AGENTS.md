@@ -88,7 +88,7 @@ companion/macos/
 
 ### 4. Apple Silicon (M1/M2/M3/M4) Optimizations
 - **CoreML & MLX:** When running the Python core on macOS, agents should leverage the Apple Neural Engine (ANE) via `mlx-audio` or `whisper.cpp` CoreML models, enabling zero-fan-noise transcription on MacBooks.
-- **Metal Acceleration:** CTranslate2 / PyTorch supports `device="mps"` (Metal Performance Shaders) on macOS.
+- **Metal Acceleration:** CTranslate2's Whisper backend supports CPU/CUDA, not `device="mps"`. Add a dedicated MLX, CoreML, or whisper.cpp provider for Apple Silicon acceleration and validate it before exposing it in the companion.
 
 ---
 

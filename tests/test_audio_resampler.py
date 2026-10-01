@@ -7,9 +7,6 @@ import pytest
 
 from diswhisper.audio.buffer import UserAudioStream
 from diswhisper.audio.resampler import (
-    DISCORD_CHANNELS,
-    DISCORD_SAMPLE_RATE,
-    WHISPER_SAMPLE_RATE,
     calculate_rms,
     pcm_to_whisper_mono,
 )

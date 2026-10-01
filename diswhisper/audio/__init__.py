@@ -3,9 +3,9 @@
 from diswhisper.audio.buffer import AudioBufferManager, AudioChunk, UserAudioStream
 from diswhisper.audio.receiver import DisWhisperSink
 from diswhisper.audio.resampler import (
+    WHISPER_SAMPLE_RATE,
     calculate_rms,
     pcm_to_whisper_mono,
-    WHISPER_SAMPLE_RATE,
 )
 
 __all__ = [

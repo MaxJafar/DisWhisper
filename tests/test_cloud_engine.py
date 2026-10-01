@@ -4,6 +4,7 @@ Unit tests for CloudWhisperEngine and WAV byte serialization.
 
 import io
 import wave
+
 import numpy as np
 import pytest
 
@@ -38,7 +39,15 @@ def test_cloud_engine_properties():
 
 
 @pytest.mark.anyio
-async def test_cloud_engine_missing_key():
+async def test_cloud_engine_missing_key(caplog):
     engine = CloudWhisperEngine(provider="groq", api_key="")
     text, lang = await engine.transcribe_async(np.zeros(16000, dtype=np.float32))
-    assert "Missing API key" in text
+    assert (text, lang) == ("", None)
+    assert "Missing API key" in caplog.text
+
+
+@pytest.mark.anyio
+async def test_sync_transcription_cannot_deadlock_an_asyncio_loop():
+    engine = CloudWhisperEngine(provider="groq", api_key="test")
+    with pytest.raises(RuntimeError, match="transcribe_async"):
+        engine.transcribe(np.ones(16000, dtype=np.float32))

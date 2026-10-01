@@ -40,6 +40,12 @@ transcripts/*.txt
 # CTranslate2 / HuggingFace model cache
 .cache/
 huggingface/
+models/
+
+# Companion build output
+**/bin/
+**/obj/
+.vs/
 
 # IDE & OS
 .vscode/

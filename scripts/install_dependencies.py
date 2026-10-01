@@ -4,11 +4,11 @@ DisWhisper Automated Dependency & Environment Verification Script.
 Checks Python version, FFmpeg binary, NVIDIA GPU/CUDA, and installs python dependencies.
 """
 
-import sys
 import os
+import platform
 import shutil
 import subprocess
-import platform
+import sys
 
 # Ensure stdout and stderr handle unicode characters across all terminals
 if hasattr(sys.stdout, "reconfigure"):
@@ -61,7 +61,7 @@ def check_ffmpeg() -> bool:
             return False
     else:
         print(f"{RED}[FAIL] FFmpeg is not found in your system PATH.{RESET}")
-        print("FFmpeg is essential for audio decoding.")
+        print("FFmpeg is optional for this PCM voice pipeline; install it if other audio tools need it.")
         if platform.system() == "Windows":
             print(f"{YELLOW}Windows install options:{RESET}")
             print("  1. winget install Gyan.FFmpeg")
@@ -96,7 +96,7 @@ def check_cuda() -> bool:
             return False
     else:
         print(f"{YELLOW}[WARN] nvidia-smi not found. CUDA acceleration may not be available.{RESET}")
-        print("DisWhisper will fall back to CPU inference, though real-time transcription requires a GPU.")
+        print("SenseVoice, Vosk, and smaller Whisper models can run on CPU. Larger Whisper models benefit from a GPU.")
         return False
 
 
@@ -132,6 +132,10 @@ def verify_libraries():
         ("faster_whisper", "faster-whisper"),
         ("ctranslate2", "ctranslate2"),
         ("sherpa_onnx", "sherpa-onnx"),
+        ("vosk", "vosk"),
+        ("davey", "DAVE encrypted voice support"),
+        ("aiohttp", "companion API"),
+        ("huggingface_hub", "model downloads"),
         ("numpy", "numpy"),
         ("pydantic", "pydantic"),
     ]
@@ -161,8 +165,8 @@ def main():
     print(f"{BOLD}{GREEN}=========================================={RESET}")
 
     py_ok = check_python()
-    ff_ok = check_ffmpeg()
-    cuda_ok = check_cuda()
+    check_ffmpeg()
+    check_cuda()
 
     if not py_ok:
         sys.exit(1)
@@ -175,12 +179,13 @@ def main():
     verify_ok = verify_libraries()
 
     print(f"\n{BOLD}{CYAN}------------------------------------------{RESET}")
-    if verify_ok and ff_ok:
+    if verify_ok:
         print(f"{BOLD}{GREEN}All checks passed! DisWhisper is ready to run.{RESET}")
         print("To configure, copy .env.example to .env and insert your DISCORD_TOKEN.")
         print("Then run: python -m diswhisper.main")
     else:
         print(f"{BOLD}{YELLOW}Setup completed with warnings. Review missing items before running.{RESET}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

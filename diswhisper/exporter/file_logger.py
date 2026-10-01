@@ -29,11 +29,11 @@ class TranscriptFileLogger:
         self.speakers: Set[str] = set()
         self.total_utterances: int = 0
 
-    def start_session(self, channel_name: str) -> Path:
+    def start_session(self, channel_name: str, engine_name: str = "DisWhisper") -> Path:
         """Start a new meeting transcription logging session."""
         self.channel_name = channel_name
         self.start_time = datetime.datetime.now()
-        self.session_id = self.start_time.strftime("%Y-%m-%d_%H-%M-%S")
+        self.session_id = self.start_time.strftime("%Y-%m-%d_%H-%M-%S_%f")
         self.file_path = self.output_dir / f"meeting_{self.session_id}.md"
         self.speakers.clear()
         self.total_utterances = 0
@@ -41,7 +41,7 @@ class TranscriptFileLogger:
         header = (
             f"# Meeting Transcript: #{channel_name}\n\n"
             f"- **Date & Time:** {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"- **Transcriber:** DisWhisper (Whisper Large-v3)\n\n"
+            f"- **Transcriber:** {engine_name}\n\n"
             f"## Live Conversation Log\n\n"
         )
         try:
@@ -50,6 +50,11 @@ class TranscriptFileLogger:
             logger.info(f"Started transcript file: {self.file_path}")
         except Exception as e:
             logger.error(f"Failed to create transcript file: {e}")
+            self.file_path = None
+            self.start_time = None
+            raise RuntimeError(
+                "Cannot create the transcript file. Check output directory permissions."
+            ) from e
 
         return self.file_path
 
@@ -60,13 +65,13 @@ class TranscriptFileLogger:
 
         dt = datetime.datetime.fromtimestamp(timestamp)
         time_str = dt.strftime("%H:%M:%S")
-        self.speakers.add(display_name)
-        self.total_utterances += 1
 
         entry = f"**[{time_str}] {display_name}:** {text}\n\n"
         try:
             with open(self.file_path, "a", encoding="utf-8") as f:
                 f.write(entry)
+            self.speakers.add(display_name)
+            self.total_utterances += 1
         except Exception as e:
             logger.error(f"Failed to write to transcript file: {e}")
 

@@ -1,255 +1,121 @@
-# DisWhisper 🎙️
+<p align="center">
+  <img src="docs/brand/readme-cover.png" alt="DisWhisper — Your conversations, written. Free, local, open source." width="100%">
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![SenseVoice](https://img.shields.io/badge/Engine-Alibaba_SenseVoice-purple.svg)](https://github.com/FunAudioLLM/SenseVoice)
-[![Whisper Model](https://img.shields.io/badge/Whisper-Large--v3-brightgreen.svg)](https://github.com/openai/whisper)
-[![sherpa-onnx](https://img.shields.io/badge/Runtime-Sherpa--ONNX-blue.svg)](https://github.com/k2-fsa/sherpa-onnx)
-[![faster-whisper](https://img.shields.io/badge/Engine-CTranslate2-orange.svg)](https://github.com/SYSTRAN/faster-whisper)
-[![Discord.py](https://img.shields.io/badge/Discord.py-2.0+-5865F2.svg)](https://discordpy.readthedocs.io/)
+<p align="center">
+  <a href="https://github.com/MaxJafar/DisWhisper/releases/latest"><b>Download for Windows</b></a>
+  · <a href="docs/windows-quickstart.md">Getting started</a>
+  · <a href="CONTRIBUTING.md">Contribute</a>
+  · <a href="LICENSE">0BSD license</a>
+</p>
 
-**DisWhisper** is a self-hosted, 100% free, and private Discord meeting transcriber bot powered by **Alibaba SenseVoice** (<100ms ultra-low latency & emotion detection) and **OpenAI Whisper Large-v3** (multilingual 99+ languages). 
+# Your conversations, written.
 
-It connects to your Discord voice channel, captures separate audio streams per speaker, buffers and downsamples audio into temporal slices, filters out silence, and streams live real-time transcripts into a designated text channel without lag or rate-limit spam.
+**DisWhisper is a free, local Discord voice transcriber with a native Windows app.** Bring your own Discord bot, download a speech model, and keep a readable record of your conversations.
 
----
+No subscription, account with us, or cloud API key is required for local transcription. Your PC runs the speech model. Discord still carries the call and any transcripts the bot posts.
 
-## 🌟 Key Features
+## A complete little workspace
 
-- **Multi-Engine Hybrid Architecture:** Switch effortlessly between **SenseVoice** (<100ms non-autoregressive streaming) and **Whisper Large-v3** (99+ languages).
-- **Sub-100ms Streaming (SenseVoice):** Alibaba SenseVoice delivers transcription up to 10x faster than Whisper, running in ~140ms on CPU or <70ms on GPU with near-zero VRAM.
-- **Rich Emotion & Audio Event Detection:** Automatically detects and displays reactions with emojis in Discord: laughter (`😂 [laughter]`), applause (`👏 [applause]`), background music (`🎵 [music]`), crying (`😭`), happiness (`😄`), and anger (`😠`).
-- **Comprehensive Multilingual Support (Whisper):** Switch to Whisper Large-v3 whenever you need translation and transcription across 99+ languages including Russian, German, French, Spanish, and Arabic.
-- **Cloud STT & LPU Inference:** Offload transcription to Groq Cloud Whisper (~200ms turnaround) or OpenAI Whisper API with a single configuration toggle.
-- **AI Executive Summaries:** Generate structured meeting notes, key agreements, and delegated action items using Cloud LLMs (Groq Llama 3.3 70B, OpenAI GPT-4o, Gemini 1.5 Flash) or 100% private on-device Local LLMs (Ollama / Llama 3.2).
-- **Windows WinUI 3 Companion App:** Beautiful Windows 11 desktop app with Mica design, model download manager, hardware VRAM gauges, and audio tuning sliders.
-- **macOS AppKit Roadmap:** Native AppKit architecture prepared for macOS Apple Silicon with CoreML / MLX acceleration (see [AGENTS.md](AGENTS.md)).
-- **Live Engine Hot-Swapping:** Use the `/engine` slash command or companion GUI to change models live during an active call without dropping out of the voice channel.
-- **User-Isolated Audio Buffering:** Decodes raw OPUS packets and isolates distinct PCM audio streams for each speaker by User ID.
-- **Adaptive Silence Gating:** Computes Root Mean Square (RMS) amplitude per 2.5-second temporal chunk; silent chunks are immediately dropped to save compute and VRAM.
-- **Live Output Interface with Debouncing:** Posts live transcripts to `#live-transcript` and automatically appends speech if the same user continues talking within a 5-second window.
-- **Automatic Meeting Exporter:** Formats and exports clean Markdown meeting transcripts with timestamps and participant summaries to the `transcripts/` directory, and attaches the file directly to Discord when `/leave` is called.
+- **Native Windows app.** Mica, light and dark themes, responsive navigation, keyboard shortcuts, restrained motion, and a tray icon. Closing the window keeps the bot running.
+- **Guided Discord setup.** Check your own bot, invite it with the required permissions, pick a server and language, and connect from Home.
+- **Download models in the app.** Whisper from tiny to large-v3-turbo, SenseVoice, and compact Vosk models for English, Russian, German, and Turkish. Switch providers without editing source code.
+- **Live, attributed transcripts.** Per-speaker audio buffering, silence filtering, and Discord message grouping.
+- **A dedicated channel.** The bot creates `#live-transcript` when invited, streams recognized speech there, and shares a Markdown export when the meeting ends.
+- **A transcript library.** Search, preview, copy, and open saved meeting files.
+- **Optional meeting notes.** Use Ollama locally, or bring a Groq/OpenAI key for cloud transcription and summaries.
 
----
+Windows x64 is the packaged desktop release. The Python core can run separately on supported Python platforms. A native Swift/AppKit macOS companion is [planned](docs/architecture.md), not shipped yet.
 
-## 🏗️ System Architecture
+## Start your first meeting
 
-```
-[Discord Voice Channel]
-         │ (48kHz Stereo OPUS Packets)
-         ▼
-[discord-ext-voice-recv + DisWhisperSink]
-         │ (Decoded 16-bit PCM per User)
-         ▼
-[Audio Resampler]
-         │ (Stereo -> Mono Averaging, 3:1 Downsample to 16kHz float32)
-         ▼
-[User-Isolated Audio Buffers]
-         │ (2.5-second Temporal Slicing)
-         │ ───> [RMS Silence Gating] ───> (< 0.01 RMS: Dropped)
-         ▼ (Non-silent 16kHz Chunks)
-[asyncio.Queue]
-         │
-         ▼
-[CTranslate2 / faster-whisper Large-v3]
-         │ (asyncio.to_thread Background Worker)
-         ▼
-[Real-Time Dispatcher]
-         ├─► [Discord #live-transcript] (Debounced message editing)
-         └─► [Markdown File Logger] (Saved to transcripts/meeting_*.md)
-```
+1. [Download the Windows ZIP](https://github.com/MaxJafar/DisWhisper/releases/latest) and extract the **whole folder**. Open `DisWhisper.Companion.exe`. Python and .NET are included in the portable package.
+2. Open **Connect Discord**. Create an application and bot in the [Discord Developer Portal](https://discord.com/developers/applications), then paste the bot token into the app's password field. Never share it.
+3. **Check connection**, use **Invite bot**, and check again after adding it to your server. Select the server and speech language, then save.
+4. In **Models**, download **Whisper Base** to start, then select **Use model**. Larger Whisper models can improve recognition at the cost of download size, memory, and processing time.
+5. On **Home**, connect the bot. Join a Discord voice channel and use **`/join`**. Use **`/leave`** or **Finish meeting** in the app to save and share the completed transcript.
 
----
+The bot does not automatically listen when invited. Let participants know before starting transcription. You can disable completed-transcript sharing, automatic channel creation, local exports, or automatic connection in Settings.
 
-## 💻 Hardware Requirements
+**Requirements:** Windows 10 (2004+) or Windows 11, x64, an internet connection for Discord and initial downloads, and permission to add/manage a bot in your server. CPU inference is supported. NVIDIA acceleration needs compatible CUDA 12 cuBLAS and cuDNN 9 libraries; the app falls back to CPU when those libraries are unavailable. The package does not bundle GPU libraries or speech-model weights.
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **GPU** | NVIDIA GTX 1660 (6GB) | NVIDIA RTX 3060 / 4060 / 5060 (8GB+) |
-| **VRAM** | 4GB (for `small` / `medium`) | 6GB–8GB (for `large-v3` with `float16`) |
-| **CPU Fallback** | 4-core Modern CPU (`int8`) | 8-core CPU |
-| **RAM** | 8 GB | 16 GB |
-| **Disk** | ~4 GB (for Large-v3 model cache) | SSD |
-| **OS** | Windows 10/11, Linux (Ubuntu 20.04+), macOS | Any |
+You can point Settings → Advanced to an existing NVIDIA runtime folder. The portable binaries are not code-signed. See [build instructions](CONTRIBUTING.md) and release SHA-256 checksums if you prefer to build or verify them yourself.
 
----
+## Choose your speech model
 
-## 📋 Prerequisites
+| Provider | Best starting point | Language support | Processing |
+|---|---|---|---|
+| Whisper | Base for general use; large-v3-turbo for a capable PC | Multilingual, including Russian | Local CPU or NVIDIA GPU |
+| SenseVoice | Small int8 model | Chinese, English, Japanese, Korean, Cantonese | Local CPU |
+| Vosk | Small model for your language | Separate English, Russian, German, Turkish models | Local CPU |
+| Groq / OpenAI | Optional provider with your API key | Provider/model dependent | Cloud |
 
-1. **Python 3.10 or higher**
-2. **FFmpeg** installed and accessible in your system `PATH`:
-   - **Windows:** `winget install Gyan.FFmpeg` or download from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/)
-   - **Linux:** `sudo apt-get install -y ffmpeg`
-   - **macOS:** `brew install ffmpeg`
-3. **NVIDIA CUDA Toolkit & Drivers** (for GPU acceleration).
+Model accuracy and speed depend on your hardware, microphone quality, language, and conversation. Vosk uses its model's fixed language. Downloaded models and dependencies keep their upstream licenses.
 
----
+For local AI notes, install [Ollama](https://ollama.com/), start it, and download a language model from **Models → Local meeting notes**. Ollama is an optional separate program. Groq/OpenAI may charge for cloud usage.
 
-## 🚀 Quick Start Guide
+## Discord commands
 
-### 1. Clone & Setup
+| Command | What it does |
+|---|---|
+| `/join` | Listen in the caller's voice channel and start a transcript |
+| `/leave` | Finish, flush remaining audio, and share the completed file |
+| `/export` | Share a snapshot of the current meeting |
+| `/status` | Show the engine, voice connection, and queue |
+| `/engine` | Switch speech provider |
+| `/summarize` | Generate optional meeting notes |
 
-```bash
-git clone https://github.com/your-username/DisWhisper.git
-cd DisWhisper
+One process transcribes one voice channel at a time. Meeting controls require the same voice channel or server-management permission. If everyone leaves, the bot finishes after 60 seconds by default. Command registration is immediate for a configured server; global Discord commands can take time to appear.
+
+The invite asks for **Manage Channels, View Channel, Send Messages, Embed Links, Attach Files, Read Message History, and Connect**. Administrator and privileged gateway intents are not required. Existing channel restrictions still apply; the bot never silently redirects transcripts into another channel if setup fails.
+
+## Where your data goes
+
+The desktop app stores configuration, downloaded models, logs, and transcripts under:
+
+```text
+%LOCALAPPDATA%\DisWhisper\Data
 ```
 
-### 2. Run Automated Environment Checker & Installer
+- Speech chunks are buffered in memory; the app does not save raw call recordings.
+- Saved transcripts are Markdown files in `Data\transcripts`. Local files survive a Discord upload failure.
+- Newly saved Discord tokens and API keys use Windows DPAPI for the current Windows account. Existing plain-text CLI `.env` files remain your responsibility.
+- The local HTTP/WebSocket service binds to loopback at `127.0.0.1:8765`, rejects cross-origin requests and unexpected Host headers, and never returns secret values.
+- Hugging Face downloads fetch public model files; its optional telemetry and implicit account-token use are disabled in the packaged app.
+- Local speech inference works without a cloud STT service. Discord receives messages and files posted by your bot. Selecting a cloud speech provider sends audio there; selecting cloud notes sends transcript text there.
 
-Run the included automated pre-flight setup script:
+There is no DisWhisper hosted backend or analytics service.
 
-```bash
-python scripts/install_dependencies.py
-```
+## Run from source
 
-This validates your Python version, verifies FFmpeg, checks your NVIDIA GPU/CUDA capability, and installs all dependencies from `requirements.txt`.
+Use Python 3.12 for the tested development environment:
 
-### 3. Create a Discord Bot
-
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and create a **New Application**.
-2. Navigate to the **Bot** tab:
-   - Click **Add Bot**.
-   - Under **Privileged Gateway Intents**, enable:
-     - ✅ **Server Members Intent**
-     - ✅ **Message Content Intent**
-   - Click **Reset Token** and copy your **Bot Token**.
-3. Navigate to **OAuth2 > URL Generator**:
-   - Scopes: `bot`, `applications.commands`
-   - Bot Permissions:
-     - `Connect`
-     - `Speak`
-     - `Use Voice Activity`
-     - `Send Messages`
-     - `Manage Channels` (optional, for auto-creating `#live-transcript`)
-     - `Attach Files`
-     - `Read Message History`
-4. Copy the generated invite link and authorize the bot to your Discord server.
-
-### 4. Configure DisWhisper
-
-Copy the example environment configuration:
-
-```bash
-# On Windows
-copy .env.example .env
-
-# On Linux/macOS
-cp .env.example .env
-```
-
-Open `.env` in any text editor and fill in your token:
-
-```env
-DISCORD_TOKEN=your_discord_bot_token_here
-GUILD_ID=your_guild_id_here  # Optional: speeds up slash command sync instantly
-```
-
-### 5. Launch the Bot
-
-- **Windows:** Double-click `scripts\run.bat` or run:
-  ```powershell
-  python -m diswhisper.main
-  ```
-- **Linux/macOS:** Run `scripts/run.sh` or:
-  ```bash
-  python3 -m diswhisper.main
-  ```
-
----
-
-## 🎮 Slash Commands
-
-| Command | Description |
-|---------|-------------|
-| `/join` | Connects DisWhisper to your current voice channel, sets up `#live-transcript`, and starts real-time transcription. |
-| `/leave` | Stops recording, disconnects from voice, finalizes the session, and uploads the `.md` transcript file to Discord. |
-| `/engine` | Views or switches active STT backend live between **SenseVoice**, **Whisper**, and **Cloud**. |
-| `/summarize` | Generates an AI executive summary and delegated action items for the ongoing meeting. |
-| `/status` | Shows real-time metrics: active voice channel, active engine, GPU VRAM usage, queue size, and active speakers. |
-| `/export` | Exports a snapshot of the ongoing meeting transcript without disconnecting. |
-
----
-
-## 🖥️ Companion Applications
-
-DisWhisper includes native desktop control center companion applications for monitoring, model downloading, and fine-grained audio customization:
-
-### Windows Companion App (WinUI 3)
-Built with **Windows App SDK** and **WinUI 3**:
-- **Dashboard:** Real-time speaker activity, Discord voice channel status, and GPU VRAM meter.
-- **Model Manager:** One-click downloads for SenseVoice, Whisper models, and local LLMs (Ollama).
-- **Cloud Providers:** Secure API key vault for Groq LPU, OpenAI, and Google Gemini.
-- **Audio DSP Tuning:** Visual sliders for chunk slicing duration (1.0s–5.0s), RMS silence threshold, and continuous speech debouncing.
-
-**To Setup & Build on Windows:**
 ```powershell
-# Run the automated setup script (installs .NET 8 SDK if needed & compiles)
-powershell -ExecutionPolicy Bypass -File scripts\setup_companion.ps1
-
-# Or launch directly
-scripts\run_companion.bat
+git clone https://github.com/MaxJafar/DisWhisper.git
+cd DisWhisper
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -e ".[dev]"
+# Native UI development requires the .NET 8 SDK:
+.\scripts\setup_companion.ps1 -CreateDesktopShortcut
+.\scripts\run_companion.bat
 ```
 
-### macOS Companion App (AppKit / Swift)
-Native macOS companion app utilizing **AppKit** and Apple Silicon optimizations (CoreML / MLX Audio). Detailed architecture, Xcode layout, and implementation guidelines are documented in [AGENTS.md](AGENTS.md).
+The companion manages the backend and uses its own app-data configuration. For a separate CLI bot, copy `.env.example` to `.env`, set your token, and run:
 
----
-
-## ⚙️ Configuration Reference
-
-All settings can be configured via environment variables in `.env` or in `config.json`:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DISCORD_TOKEN` | *Required* | Discord Bot Token from Developer Portal. |
-| `GUILD_ID` | `null` | Server ID for instant command sync. If omitted, global sync applies. |
-| `TRANSCRIPT_CHANNEL_NAME`| `live-transcript` | Name of the text channel for real-time text output. |
-| `WHISPER_MODEL_SIZE` | `large-v3` | Whisper model size (`tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`). |
-| `DEVICE` | `cuda` | Hardware target: `cuda` or `cpu`. Auto-falls back to CPU if CUDA fails. |
-| `COMPUTE_TYPE` | `float16` | Precision: `float16` (CUDA recommended), `int8_float16`, `int8`, `float32`. |
-| `LANGUAGE` | `en` | Spoken language ISO code (`en`, `es`, `fr`, etc.) or empty for auto-detect. |
-| `CHUNKING_DURATION_SEC`| `2.5` | Temporal chunk slice duration in seconds (2.0–3.0s recommended). |
-| `SILENCE_THRESHOLD` | `0.01` | RMS amplitude threshold. Chunks quieter than this are dropped. |
-| `CONTINUOUS_SPEECH_TIMEOUT_SEC` | `5.0` | Debounce window in seconds to append speech to the same message block. |
-| `AUTO_SAVE_TRANSCRIPTS` | `true` | Save session markdown files to `transcripts/` folder. |
-| `LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
-
----
-
-## 🧪 Running Unit Tests
-
-DisWhisper includes a full test suite validating audio decimation, channel downmixing, RMS gating, and configuration loading:
-
-```bash
-pytest tests/ -v
+```powershell
+.\.venv\Scripts\python -m diswhisper.main
 ```
 
----
+CLI configuration priority is environment/`.env`, then `config.json`, then defaults. JSON can be based on `config.json.example`. Keep private configuration and meeting files out of commits.
 
-## 🛠️ Troubleshooting
+See [CONTRIBUTING.md](CONTRIBUTING.md) for release builds, [the API reference](docs/api.md) for companion integrations, and [the architecture](docs/architecture.md) for the macOS plan.
 
-### Missing FFmpeg
-- If you see `RuntimeError: ffmpeg was not found`:
-  Make sure FFmpeg is installed and added to your system `PATH`. Test it in your terminal by running `ffmpeg -version`.
+## License and community
 
-### PyNaCl or Opus Library Warning
-- `discord-ext-voice-recv` and `discord.py` require `pynacl`. Run:
-  ```bash
-  pip install pynacl
-  ```
-  On Windows, `pynacl` wheels are pre-compiled and install seamlessly.
+DisWhisper source and original branding are released under **[Zero-Clause BSD (0BSD)](LICENSE)**. You may use, copy, modify, and distribute them for any purpose, with or without a fee, without an attribution requirement. The license includes the usual warranty disclaimer.
 
-### CUDA Out of Memory (OOM)
-- If your GPU has less than 6GB VRAM, switch `WHISPER_MODEL_SIZE` in `.env`:
-  ```env
-  WHISPER_MODEL_SIZE=large-v3-turbo
-  # OR
-  WHISPER_MODEL_SIZE=medium
-  ```
-  `large-v3-turbo` runs up to 4x faster with minimal quality difference and lower VRAM usage.
+Dependencies, fonts supplied by your OS, and downloaded models retain their own licenses. The Windows portable application includes GPL audio codecs and is distributed as a combined work under GPL-3.0-or-later. Its [release page](https://github.com/MaxJafar/DisWhisper/releases/latest) includes corresponding third-party sources; project source remains available under 0BSD. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
----
+Bug reports, accessibility feedback, and contributions are welcome. Use the [issue tracker](https://github.com/MaxJafar/DisWhisper/issues) for product bugs and [SECURITY.md](SECURITY.md) for private security reports.
 
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
+DisWhisper is an independent project and is not affiliated with Discord, OpenAI, Alibaba, or the other providers.

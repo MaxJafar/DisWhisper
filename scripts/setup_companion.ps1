@@ -1,50 +1,37 @@
-# DisWhisper Companion App Windows Build & Setup Script
-# Checks .NET 8 SDK, restores NuGet packages, and compiles the WinUI 3 App
+# Build the unpackaged WinUI companion from any current directory.
+[CmdletBinding()]
+param(
+    [string]$DotnetPath = "dotnet",
+    [ValidateSet("x64", "ARM64")][string]$Platform = "x64",
+    [switch]$InstallSdk,
+    [switch]$CreateDesktopShortcut
+)
 
 $ErrorActionPreference = "Stop"
+$env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
+$env:DOTNET_NOLOGO = "1"
 
-Write-Host "==============================================" -ForegroundColor Cyan
-Write-Host "  DisWhisper WinUI 3 Companion App Setup      " -ForegroundColor Cyan
-Write-Host "==============================================" -ForegroundColor Cyan
+function Test-CompatibleSdk {
+    if (-not (Get-Command $DotnetPath -ErrorAction SilentlyContinue)) { return $false }
+    $sdks = & $DotnetPath --list-sdks
+    return [bool]($sdks | Where-Object { $_ -match '^(8|9|[1-9]\d+)\.' })
+}
 
-# 1. Check for .NET SDK
-$dotnetSdk = Get-Command dotnet -ErrorAction SilentlyContinue
-$hasSdk = $false
-
-if ($dotnetSdk) {
-    $sdks = & dotnet --list-sdks 2>$null
-    if ($sdks -match "(8\.|9\.)") {
-        $hasSdk = $true
-        Write-Host "[OK] Detected compatible .NET SDK: $sdks" -ForegroundColor Green
+if (-not (Test-CompatibleSdk)) {
+    if (-not $InstallSdk) {
+        throw "A .NET 8+ SDK is required. Install it from https://dotnet.microsoft.com/download/dotnet/8.0 or rerun with -InstallSdk."
     }
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw "winget is unavailable; install the .NET 8 SDK manually." }
+    & winget install --id Microsoft.DotNet.SDK.8 --exact --accept-source-agreements --accept-package-agreements
+    if ($LASTEXITCODE -ne 0) { throw "SDK installation failed with exit code $LASTEXITCODE." }
+    if (-not (Test-CompatibleSdk)) { throw "Restart your terminal so the installed SDK is available, then run this script again." }
 }
 
-if (-not $hasSdk) {
-    Write-Host "[!] No .NET 8 or 9 SDK detected." -ForegroundColor Yellow
-    Write-Host "Attempting automated installation via winget..." -ForegroundColor Yellow
-    
-    try {
-        winget install Microsoft.DotNet.SDK.8 --accept-source-agreements --accept-package-agreements
-        Write-Host "[OK] .NET 8 SDK installed successfully! Please restart your terminal if build fails." -ForegroundColor Green
-    } catch {
-        Write-Host "[FAIL] Automated winget install failed: $_" -ForegroundColor Red
-        Write-Host "Please download .NET 8 SDK manually from: https://dotnet.microsoft.com/download/dotnet/8.0" -ForegroundColor Red
-        exit 1
-    }
+$projectPath = Join-Path $PSScriptRoot "..\companion\windows\DisWhisper.Companion\DisWhisper.Companion.csproj"
+$runtimeId = "win-$($Platform.ToLowerInvariant())"
+& $DotnetPath build $projectPath -c Release "-p:Platform=$Platform" "-p:RuntimeIdentifier=$runtimeId" --nologo -v:minimal
+if ($LASTEXITCODE -ne 0) { throw "Companion build failed with exit code $LASTEXITCODE." }
+if ($CreateDesktopShortcut) {
+    & (Join-Path $PSScriptRoot "create_desktop_shortcut.ps1") -Platform $Platform
 }
-
-# 2. Restore and Build WinUI 3 Solution
-$solutionPath = "companion\windows\DisWhisper.Companion.sln"
-
-Write-Host "`n==> Restoring NuGet packages..." -ForegroundColor Cyan
-& dotnet restore $solutionPath
-
-Write-Host "`n==> Compiling WinUI 3 Companion App..." -ForegroundColor Cyan
-& dotnet build $solutionPath -c Release
-
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "`n[SUCCESS] DisWhisper WinUI 3 Companion App built successfully!" -ForegroundColor Green
-    Write-Host "To launch, run: scripts\run_companion.bat" -ForegroundColor Cyan
-} else {
-    Write-Host "`n[FAIL] Build failed with exit code $LASTEXITCODE." -ForegroundColor Red
-}
+Write-Host "Companion built. Launch it with scripts\run_companion.bat on x64 Windows." -ForegroundColor Green

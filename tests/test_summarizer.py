@@ -3,6 +3,7 @@ Unit tests for MeetingSummarizer.
 """
 
 from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from diswhisper.summarizer.engine import MeetingSummarizer

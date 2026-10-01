@@ -3,7 +3,6 @@ Unit tests for SenseVoice rich transcription parsing and engine factory.
 """
 
 from unittest.mock import MagicMock, patch
-import pytest
 
 from diswhisper.config import Config
 from diswhisper.transcriber.factory import create_stt_engine

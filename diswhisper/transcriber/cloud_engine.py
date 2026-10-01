@@ -7,7 +7,6 @@ asynchronous transcription via cloud REST endpoints.
 from __future__ import annotations
 
 import io
-import json
 import logging
 import wave
 from typing import Optional, Tuple
@@ -94,7 +93,7 @@ class CloudWhisperEngine(BaseSTTEngine):
         if not self.api_key:
             err = f"Missing API key for {self.provider.upper()} STT!"
             logger.error(err)
-            return f"[{err}]", None
+            return "", None
 
         wav_bytes = float32_to_wav_bytes(audio_data, sample_rate=16000)
 
@@ -126,7 +125,7 @@ class CloudWhisperEngine(BaseSTTEngine):
                     else:
                         error_body = await resp.text()
                         logger.error(f"Cloud STT API error ({resp.status}): {error_body}")
-                        return f"[Cloud STT error: HTTP {resp.status}]", None
+                        return "", None
         except Exception as e:
             logger.error(f"Exception during Cloud STT request: {e}", exc_info=True)
             return "", None
@@ -139,10 +138,7 @@ class CloudWhisperEngine(BaseSTTEngine):
         import asyncio
 
         try:
-            loop = asyncio.get_running_loop()
-            # If called from a thread without running loop
-            import concurrent.futures
-            future = asyncio.run_coroutine_threadsafe(self.transcribe_async(audio_data), loop)
-            return future.result(timeout=10.0)
+            asyncio.get_running_loop()
         except RuntimeError:
             return asyncio.run(self.transcribe_async(audio_data))
+        raise RuntimeError("Use await transcribe_async() when calling from an asyncio event loop")

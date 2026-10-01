@@ -36,6 +36,8 @@ class DisWhisperSink(voice_recv.AudioSink):
         Extracts user identity and PCM bytes.
         """
         # Determine user identity
+        if user is not None and user.bot:
+            return
         if user is not None:
             user_id = user.id
             display_name = getattr(user, "display_name", getattr(user, "name", f"User-{user.id}"))
@@ -66,6 +68,6 @@ class DisWhisperSink(voice_recv.AudioSink):
         """Called when the voice client disconnects or stops listening."""
         logger.info("DisWhisperSink cleanup called. Flushing buffered streams...")
         try:
-            self.buffer_manager.flush_all()
+            self.buffer_manager.close()
         except Exception as e:
             logger.error(f"Error during AudioSink cleanup: {e}")

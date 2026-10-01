@@ -1,5 +1,6 @@
 @echo off
 title DisWhisper - Discord Meeting Transcriber
+cd /d "%~dp0.."
 echo ==============================================
 echo   DisWhisper: Local Real-Time Transcriber
 echo ==============================================
@@ -15,7 +16,11 @@ if not exist .env (
     )
 )
 
-python -m diswhisper.main
+if exist ".venv\Scripts\python.exe" (
+    ".venv\Scripts\python.exe" -m diswhisper.main %*
+) else (
+    python -m diswhisper.main %*
+)
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo Bot stopped with error code %ERRORLEVEL%.

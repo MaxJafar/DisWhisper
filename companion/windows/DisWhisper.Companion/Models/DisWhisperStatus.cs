@@ -17,10 +17,10 @@ public class DisWhisperStatus
     public string? VoiceChannel { get; set; }
 
     [JsonPropertyName("engine_name")]
-    public string EngineName { get; set; } = "SenseVoice";
+    public string EngineName { get; set; } = "Whisper";
 
     [JsonPropertyName("model_name")]
-    public string ModelName { get; set; } = "SenseVoiceSmall";
+    public string ModelName { get; set; } = "base";
 
     [JsonPropertyName("device")]
     public string Device { get; set; } = "cpu";
@@ -39,6 +39,13 @@ public class DisWhisperStatus
 
     [JsonPropertyName("gpu_memory")]
     public GpuMemoryInfo? GpuMemory { get; set; }
+    [JsonPropertyName("engine_loaded")] public bool EngineLoaded { get; set; }
+    [JsonPropertyName("error")] public string Error { get; set; } = "";
+    [JsonPropertyName("token_configured")] public bool TokenConfigured { get; set; }
+    [JsonPropertyName("managed")] public bool Managed { get; set; }
+    [JsonPropertyName("language")] public string Language { get; set; } = "auto";
+    [JsonPropertyName("session_id")] public string SessionId { get; set; } = "";
+    [JsonPropertyName("process_id")] public int ProcessId { get; set; }
 }
 
 public class GpuMemoryInfo

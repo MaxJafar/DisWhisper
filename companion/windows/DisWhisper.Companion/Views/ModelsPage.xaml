@@ -1,108 +1,46 @@
-<Page
-    x:Class="DisWhisper.Companion.Views.ModelsPage"
+<Page x:Class="DisWhisper.Companion.Views.ModelsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
-
+    xmlns:models="using:DisWhisper.Companion.Models" NavigationCacheMode="Required">
+    <Page.Resources>
+        <DataTemplate x:Key="ModelCard" x:DataType="models:ModelInfo">
+            <Border Margin="0,0,0,12" Style="{StaticResource CardStyle}">
+                <Grid ColumnSpacing="20">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="136"/></Grid.ColumnDefinitions>
+                    <StackPanel Spacing="9">
+                        <StackPanel Orientation="Horizontal" Spacing="9"><TextBlock Text="{x:Bind Name}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap"/><Border Visibility="{x:Bind RecommendedVisibility}" Background="{ThemeResource DisWhisperSoftBrush}" CornerRadius="5" Padding="7,3"><TextBlock Text="START HERE" FontSize="9" FontWeight="SemiBold" Foreground="{ThemeResource DisWhisperBrandTextBrush}"/></Border></StackPanel>
+                        <TextBlock Text="{x:Bind Description}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{x:Bind Details}" FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                        <TextBlock Text="{x:Bind StatusText, Mode=OneWay}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource DisWhisperBrandTextBrush}"/>
+                        <ProgressBar Visibility="{x:Bind ProgressVisibility, Mode=OneWay}" IsIndeterminate="{x:Bind IsIndeterminate, Mode=OneWay}" Value="{x:Bind ProgressValue, Mode=OneWay}" Maximum="100"/>
+                        <HyperlinkButton Content="Model details ↗" Tag="{x:Bind SourceUrl}" Click="Source_Click" FontSize="11" Padding="0" HorizontalAlignment="Left"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="9">
+                        <Button Content="{x:Bind DownloadLabel, Mode=OneWay}" Tag="{x:Bind Id}" Click="DownloadModel_Click" Loaded="Action_Loaded"
+                            IsEnabled="{x:Bind CanDownload, Mode=OneWay}" Visibility="{x:Bind DownloadVisibility, Mode=OneWay}" HorizontalAlignment="Stretch" Style="{StaticResource PrimaryActionStyle}"/>
+                        <Button Content="{x:Bind ActivationLabel}" Tag="{x:Bind Id}" Click="ActivateModel_Click" Loaded="Action_Loaded"
+                            IsEnabled="{x:Bind CanActivate, Mode=OneWay}" HorizontalAlignment="Stretch" Style="{StaticResource QuietActionStyle}"/>
+                        <Button Content="Cancel" Tag="{x:Bind Id}" Click="Cancel_Click" Visibility="{x:Bind ProgressVisibility, Mode=OneWay}" HorizontalAlignment="Stretch"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Page.Resources>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Spacing="24" Padding="0,0,16,24">
-            <!-- Header -->
-            <StackPanel>
-                <TextBlock Text="Model Manager &amp; Local LLM" FontSize="26" FontWeight="SemiBold"/>
-                <TextBlock Text="Download, manage, and inspect local speech recognition models and on-device LLMs" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-            </StackPanel>
-
-            <!-- SenseVoice Card -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="20">
-                <Grid ColumnSpacing="20">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="60"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="180"/>
-                    </Grid.ColumnDefinitions>
-
-                    <FontIcon Grid.Column="0" Glyph="&#xE753;" FontSize="36" VerticalAlignment="Center" Foreground="{StaticResource DisWhisperBrandBrush}"/>
-                    <StackPanel Grid.Column="1" Spacing="6">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock Text="Alibaba SenseVoice Small" FontSize="18" FontWeight="SemiBold"/>
-                            <Border Background="{StaticResource DisWhisperGreenBrush}" CornerRadius="4" Padding="6,2">
-                                <TextBlock Text="RECOMMENDED &lt;100ms" FontSize="10" FontWeight="Bold" Foreground="White"/>
-                            </Border>
-                        </StackPanel>
-                        <TextBlock Text="Ultra-fast non-autoregressive speech model with native emotion and event detection (laughter, applause, music). Runs in ~140ms on CPU or &lt;70ms on GPU with near-zero VRAM." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Text="Languages: English, Chinese, Cantonese, Japanese, Korean • Size: ~120 MB" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="2" Spacing="8" VerticalAlignment="Center">
-                        <Button Content="Activate Engine" Tag="sensevoice" Click="ActivateEngine_Click" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch"/>
-                        <Button Content="Verify / Redownload" Tag="sensevoice" Click="DownloadModel_Click" HorizontalAlignment="Stretch"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- Whisper Large-v3 Card -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="20">
-                <Grid ColumnSpacing="20">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="60"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="180"/>
-                    </Grid.ColumnDefinitions>
-
-                    <FontIcon Grid.Column="0" Glyph="&#xE720;" FontSize="36" VerticalAlignment="Center" Foreground="{StaticResource DisWhisperBrandBrush}"/>
-                    <StackPanel Grid.Column="1" Spacing="6">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock Text="OpenAI Whisper Large-v3" FontSize="18" FontWeight="SemiBold"/>
-                            <Border Background="{ThemeResource SystemFillColorNeutralBrush}" CornerRadius="4" Padding="6,2">
-                                <TextBlock Text="99+ LANGUAGES" FontSize="10" FontWeight="Bold"/>
-                            </Border>
-                        </StackPanel>
-                        <TextBlock Text="State-of-the-art multilingual accuracy for Russian, Spanish, German, French, and international languages. Powered locally by CTranslate2 (CUDA float16 recommended)." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Text="Languages: 99+ Languages • Size: ~3.1 GB • VRAM: ~3.8 GB" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="2" Spacing="8" VerticalAlignment="Center">
-                        <Button Content="Activate Engine" Tag="whisper" Click="ActivateEngine_Click" HorizontalAlignment="Stretch"/>
-                        <Button Content="Download Model" Tag="large-v3" Click="DownloadModel_Click" HorizontalAlignment="Stretch"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- Local LLM (Ollama) Card -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="20">
-                <Grid ColumnSpacing="20">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="60"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="180"/>
-                    </Grid.ColumnDefinitions>
-
-                    <FontIcon Grid.Column="0" Glyph="&#xE765;" FontSize="36" VerticalAlignment="Center" Foreground="{StaticResource DisWhisperBrandBrush}"/>
-                    <StackPanel Grid.Column="1" Spacing="6">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock Text="Local Meeting Summarizer (Ollama / Llama 3.2)" FontSize="18" FontWeight="SemiBold"/>
-                            <Border Background="{StaticResource DisWhisperBrandBrush}" CornerRadius="4" Padding="6,2">
-                                <TextBlock Text="100% PRIVATE" FontSize="10" FontWeight="Bold" Foreground="White"/>
-                            </Border>
-                        </StackPanel>
-                        <TextBlock Text="Generate executive meeting minutes, action items, and agendas completely on-device without cloud API charges or internet data leakage." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Text="Endpoint: http://localhost:11434 • Models: Llama 3.2, Qwen 2.5, Mistral" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="2" Spacing="8" VerticalAlignment="Center">
-                        <Button Content="Test Ollama Connection" Click="TestOllama_Click" HorizontalAlignment="Stretch"/>
-                        <Button Content="Open Ollama.com" Click="OpenOllamaSite_Click" HorizontalAlignment="Stretch"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- Progress Bar Info -->
-            <StackPanel x:Name="DownloadProgressPanel" Visibility="Collapsed" Spacing="8">
-                <TextBlock x:Name="DownloadStatusLabel" Text="Downloading model..." FontWeight="SemiBold"/>
-                <ProgressBar x:Name="ModelProgressBar" Value="0" Maximum="100" Height="8"/>
-            </StackPanel>
+        <StackPanel Spacing="20" Padding="0,0,4,24">
+            <Grid ColumnSpacing="18"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Models" Style="{StaticResource PageTitleStyle}"/><TextBlock Text="Download once. Transcribe locally, whenever you need." Style="{StaticResource PageDescriptionStyle}"/></StackPanel><Button Grid.Column="1" Content="Refresh" VerticalAlignment="Center" Click="Refresh_Click" Style="{StaticResource QuietActionStyle}"/></Grid>
+            <InfoBar x:Name="ModelNotice" IsOpen="False" IsClosable="True"/>
+            <Border Background="{ThemeResource DisWhisperSoftBrush}" CornerRadius="12" Padding="18"><StackPanel Spacing="7"><TextBlock Text="New here? Start with Whisper base." FontWeight="SemiBold" Foreground="{ThemeResource DisWhisperBrandTextBrush}"/><TextBlock Text="A lightweight multilingual model that runs on your CPU. Try small for more accuracy, or large-v3-turbo with a compatible NVIDIA GPU." TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></StackPanel></Border>
+            <AutoSuggestBox x:Name="SearchBox" PlaceholderText="Find a model or language…" TextChanged="Search_Changed" QueryIcon="Find"/>
+            <TextBlock Text="Speech recognition" Style="{StaticResource SectionTitleStyle}"/>
+            <ItemsControl x:Name="SpeechModels" ItemTemplate="{StaticResource ModelCard}"/>
+            <Expander Header="Local meeting notes · optional" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                <StackPanel Spacing="16"><TextBlock Text="Ollama runs the summary model on your PC. Install and start Ollama once, then download a model here." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/><HyperlinkButton Content="Get Ollama ↗" Click="Ollama_Click" HorizontalAlignment="Left" Padding="0"/><ItemsControl x:Name="SummaryModels" ItemTemplate="{StaticResource ModelCard}"/></StackPanel>
+            </Expander>
+            <Expander Header="Cloud speech providers · optional" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                <StackPanel Spacing="16"><TextBlock Text="Cloud providers require your own API key and send speech to that provider. Local models work without these services." TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/><Button Content="Set up optional cloud keys →" Click="Cloud_Click" HorizontalAlignment="Left" Style="{StaticResource QuietActionStyle}"/><ItemsControl x:Name="CloudModels" ItemTemplate="{StaticResource ModelCard}"/></StackPanel>
+            </Expander>
+            <TextBlock Text="Model download sizes are approximate. Individual model licenses are available through Model details." FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
         </StackPanel>
     </ScrollViewer>
 </Page>

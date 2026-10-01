@@ -7,8 +7,13 @@ and starts the Discord bot gateway connection.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import logging
+import os
 import sys
+from pathlib import Path
+
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 from diswhisper.bot import DisWhisperBot
 from diswhisper.config import load_config
@@ -34,6 +39,7 @@ def setup_logging(level_name: str) -> None:
     logging.getLogger("discord").setLevel(logging.WARNING)
     logging.getLogger("discord.gateway").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
 
 
 def main() -> None:
@@ -52,8 +58,8 @@ def main() -> None:
         "-e",
         type=str,
         default=None,
-        choices=["sensevoice", "whisper"],
-        help="Speech-to-text backend engine ('sensevoice' or 'whisper')",
+        choices=["sensevoice", "whisper", "vosk", "cloud", "groq", "openai"],
+        help="Speech-to-text provider (choose models in the companion)",
     )
     parser.add_argument(
         "--model",
@@ -69,7 +75,16 @@ def main() -> None:
         default=None,
         help="Override device (cuda or cpu)",
     )
+    parser.add_argument("--companion", action="store_true", help="Run the desktop service, including setup and bot start/stop controls")
+    parser.add_argument("--data-dir", type=Path, help="Folder for settings, models, logs, and transcripts")
+    parser.add_argument("--session-id", default="", help=argparse.SUPPRESS)
     args = parser.parse_args()
+
+    if args.data_dir:
+        args.data_dir.mkdir(parents=True, exist_ok=True)
+        os.chdir(args.data_dir.resolve())
+        if not args.config:
+            args.config = str(Path.cwd() / "config.json")
 
     # 1. Load configuration
     cfg = load_config(args.config)
@@ -85,6 +100,15 @@ def main() -> None:
     logger = logging.getLogger("DisWhisper")
 
     logger.info("==================================================")
+
+    if args.companion:
+        from diswhisper.runtime import CompanionRuntime
+
+        try:
+            asyncio.run(CompanionRuntime(cfg, args.session_id).run())
+        except KeyboardInterrupt:
+            logger.info("DisWhisper stopped.")
+        return
     logger.info("  DisWhisper - Discord Meeting Transcriber        ")
     logger.info("==================================================")
 
@@ -101,6 +125,18 @@ def main() -> None:
     # 4. Initialize Local STT Engine
     logger.info(f"Initializing STT engine (Engine: {cfg.STT_ENGINE}, Device: {cfg.DEVICE})...")
     try:
+        from diswhisper.models import download_model, get_model, is_downloaded
+        from diswhisper.runtime import selected_model_id
+
+        try:
+            selected = get_model(selected_model_id(cfg))
+        except ValueError:
+            selected = None  # Keep custom/legacy Whisper identifiers usable in the CLI.
+        if selected and selected.category == "local_stt" and not is_downloaded(cfg, selected):
+            async def progress(percent, detail):
+                logger.info("%s%s", detail, f" ({percent}%)" if percent is not None else "")
+
+            asyncio.run(download_model(cfg, selected, progress))
         engine = create_stt_engine(cfg)
     except Exception as e:
         logger.critical(f"Failed to initialize STT engine: {e}", exc_info=True)

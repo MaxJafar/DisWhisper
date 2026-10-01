@@ -5,8 +5,13 @@ Supports CUDA acceleration, float16 precision, CPU fallback, and CUDA OOM recove
 
 from __future__ import annotations
 
+import ctypes
 import gc
 import logging
+import os
+import site
+import sys
+from pathlib import Path
 from typing import Optional, Tuple
 
 import numpy as np
@@ -15,6 +20,41 @@ from faster_whisper import WhisperModel
 from diswhisper.transcriber.base import BaseSTTEngine
 
 logger = logging.getLogger(__name__)
+_CUDA_DLL_DIRECTORIES: dict[str, object] = {}
+_CUDA_LIBRARIES: list[object] = []
+
+
+def _prepare_windows_cuda_libraries(extra_directory: Optional[str] = None) -> None:
+    """Make optional NVIDIA wheels discoverable without changing the system PATH."""
+    if sys.platform != "win32":
+        return
+    directories = []
+    for package_directory in site.getsitepackages():
+        directories.extend((Path(package_directory) / "nvidia").glob("*/bin"))
+    if extra_directory:
+        root = Path(extra_directory).expanduser().resolve()
+        directories.append(root)
+        directories.extend(root.glob("*/bin"))
+    for directory in directories:
+        path = str(directory)
+        if not directory.is_dir() or path in _CUDA_DLL_DIRECTORIES:
+            continue
+        # Keep the handles alive for later, lazily loaded inference libraries.
+        _CUDA_DLL_DIRECTORIES[path] = os.add_dll_directory(path)
+        os.environ["PATH"] = path + os.pathsep + os.environ.get("PATH", "")
+
+
+def _cuda_libraries_available() -> bool:
+    """Probe libraries before CTranslate2 loads them lazily on first inference."""
+    if sys.platform != "win32":
+        return True
+    _prepare_windows_cuda_libraries()
+    try:
+        for name in ("cublas64_12.dll", "cudnn64_9.dll"):
+            _CUDA_LIBRARIES.append(ctypes.WinDLL(name))
+        return True
+    except OSError:
+        return False
 
 
 class WhisperEngine(BaseSTTEngine):
@@ -30,12 +70,16 @@ class WhisperEngine(BaseSTTEngine):
         compute_type: str = "float16",
         language: Optional[str] = "en",
         beam_size: int = 1,
+        model_path: Optional[str] = None,
+        cuda_library_dir: Optional[str] = None,
     ):
         self._model_size = model_size
+        self._model_path = model_path or model_size
         self.requested_device = device
         self.requested_compute_type = compute_type
         self.language = language
         self.beam_size = beam_size
+        self.cuda_library_dir = cuda_library_dir
 
         self.model: Optional[WhisperModel] = None
         self._active_device = device
@@ -63,6 +107,19 @@ class WhisperEngine(BaseSTTEngine):
         """Load the faster-whisper model with automatic CPU fallback if CUDA fails."""
         device_to_try = self.requested_device
         compute_to_try = self.requested_compute_type
+        if device_to_try == "auto":
+            import ctranslate2
+
+            device_to_try = "cuda" if ctranslate2.get_cuda_device_count() else "cpu"
+        if device_to_try == "cuda":
+            _prepare_windows_cuda_libraries(self.cuda_library_dir)
+            if not _cuda_libraries_available():
+                logger.warning("CUDA 12 cuBLAS and cuDNN 9 are unavailable; using local CPU inference.")
+                device_to_try = "cpu"
+        if device_to_try == "cpu" and compute_to_try in ("float16", "int8_float16"):
+            compute_to_try = "int8"
+        if device_to_try == "cuda":
+            _prepare_windows_cuda_libraries()
 
         logger.info(
             f"Loading Whisper model '{self._model_size}' on device='{device_to_try}' "
@@ -71,7 +128,7 @@ class WhisperEngine(BaseSTTEngine):
 
         try:
             self.model = WhisperModel(
-                model_size_or_path=self._model_size,
+                model_size_or_path=self._model_path,
                 device=device_to_try,
                 compute_type=compute_to_try,
             )
@@ -87,15 +144,19 @@ class WhisperEngine(BaseSTTEngine):
                 )
                 try:
                     self.model = WhisperModel(
-                        model_size_or_path=self._model_size,
+                        model_size_or_path=self._model_path,
                         device="cpu",
                         compute_type="int8",
                     )
                     self._active_device = "cpu"
                     self._active_compute_type = "int8"
-                    logger.info(f"Fallback to CPU succeeded for model '{self._model_size}'.")
+                    logger.info(
+                        f"Fallback to CPU succeeded for model '{self._model_size}'."
+                    )
                 except Exception as cpu_err:
-                    logger.error(f"Fatal error loading Whisper model on CPU fallback: {cpu_err}")
+                    logger.error(
+                        f"Fatal error loading Whisper model on CPU fallback: {cpu_err}"
+                    )
                     raise
             else:
                 logger.error(f"Failed to load Whisper model: {e}")
@@ -121,7 +182,9 @@ class WhisperEngine(BaseSTTEngine):
             )
 
             # Accumulate segment text
-            text_parts = [segment.text.strip() for segment in segments if segment.text.strip()]
+            text_parts = [
+                segment.text.strip() for segment in segments if segment.text.strip()
+            ]
             full_text = " ".join(text_parts).strip()
             detected_lang = getattr(info, "language", self.language)
 
@@ -134,7 +197,7 @@ class WhisperEngine(BaseSTTEngine):
                     f"CUDA Out Of Memory (OOM) encountered during transcription! Purging memory cache... Error: {e}"
                 )
                 self.purge_gpu_cache()
-                return "[Audio dropped due to GPU Out of Memory]", None
+                return "", None
             else:
                 logger.error(f"RuntimeError during transcription: {e}")
                 return "", None
@@ -146,6 +209,7 @@ class WhisperEngine(BaseSTTEngine):
         """Attempt to free CUDA memory cache."""
         try:
             import torch
+
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.ipc_collect()
