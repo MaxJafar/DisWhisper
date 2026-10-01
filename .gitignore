@@ -40,7 +40,7 @@ transcripts/*.txt
 # CTranslate2 / HuggingFace model cache
 .cache/
 huggingface/
-models/
+/models/
 
 # Companion build output
 **/bin/
