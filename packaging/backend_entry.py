@@ -2,12 +2,17 @@
 import os
 import sys
 
+for stream in (sys.stdout, sys.stderr):
+    if stream is not None and hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8", errors="replace")
+
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
 # HTTP transfer callbacks make cancellation interruptible between chunks.
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
-from diswhisper.main import main
+# Bootstrap encoding and Hugging Face flags before importing the core.
+from diswhisper.main import main  # noqa: E402
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["--check-native"]:

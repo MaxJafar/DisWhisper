@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace DisWhisper.Companion.Services;
 
@@ -38,6 +39,8 @@ public sealed class BackendProcessService : IAsyncDisposable
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
             };
             if (!File.Exists(start.FileName))
             {
