@@ -5,11 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "diswhisper"
 version = "0.2.1"
-description = "Free local Discord transcription with native Windows and macOS companions"
+description = "Local Discord voice transcription and AI meeting notes with native Windows and macOS apps"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "0BSD" }
-keywords = ["discord", "transcriber", "whisper", "faster-whisper", "stt", "speech-to-text", "realtime"]
+keywords = [
+    "discord", "discord-bot", "transcription", "speech-to-text", "speech-recognition",
+    "whisper", "faster-whisper", "sensevoice", "vosk", "local-ai", "meeting-notes",
+    "windows", "macos",
+]
 authors = [
     { name = "DisWhisper Contributors" }
 ]
@@ -53,6 +57,8 @@ dev = [
 Homepage = "https://github.com/MaxJafar/DisWhisper"
 Source = "https://github.com/MaxJafar/DisWhisper"
 Issues = "https://github.com/MaxJafar/DisWhisper/issues"
+Releases = "https://github.com/MaxJafar/DisWhisper/releases"
+Documentation = "https://github.com/MaxJafar/DisWhisper#readme"
 
 [project.scripts]
 diswhisper = "diswhisper.main:main"

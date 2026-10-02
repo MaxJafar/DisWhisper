@@ -1,22 +1,23 @@
 <p align="center">
-  <img src="docs/brand/readme-cover.png" alt="DisWhisper — Your conversations, written. Free, local, open source. Windows + macOS." width="100%">
+  <img src="docs/brand/readme-cover.png" alt="DisWhisper — local Discord voice transcription for Windows and macOS" width="100%">
 </p>
 
 <p align="center">
   <a href="https://github.com/MaxJafar/DisWhisper/releases/latest/download/DisWhisper-0.2.1-windows-x64-setup.exe"><b>Download for Windows</b></a>
   · <a href="https://github.com/MaxJafar/DisWhisper/releases/latest"><b>Download for macOS</b></a>
-  · <a href="docs/windows-quickstart.md">Getting started</a>
+  · <a href="docs/windows-quickstart.md">Windows setup</a>
+  · <a href="docs/macos-quickstart.md">Mac setup</a>
   · <a href="CONTRIBUTING.md">Contribute</a>
   · <a href="LICENSE">0BSD license</a>
 </p>
 
-# Your conversations, written.
+# DisWhisper — Discord voice transcription for Windows and macOS
 
-**DisWhisper is a free, local Discord voice transcriber with native Windows and macOS apps.** Bring your own Discord bot, download a speech model, and keep a readable record of your conversations.
+**DisWhisper is a free, open-source Discord transcription app with native Windows and macOS interfaces.** Transcribe voice calls locally with Whisper, SenseVoice, or Vosk, follow each speaker, and save searchable meeting transcripts. Bring your own Discord bot and download a speech model in the app.
 
 No subscription, account with us, or cloud API key is required for local transcription. Your computer runs the speech model. Discord still carries the call and any transcripts the bot posts.
 
-## A complete little workspace
+## Features
 
 - **Native Windows app.** Mica, light and dark themes, responsive navigation, keyboard shortcuts, restrained motion, and a tray icon. Closing the window keeps the bot running.
 - **Native macOS app.** Swift and AppKit, the same workspace and violet visual language, a translucent split-view sidebar, light/dark themes, ⌘1–4 navigation, and a menu-bar companion. Closing the window keeps the bot running.
@@ -25,17 +26,17 @@ No subscription, account with us, or cloud API key is required for local transcr
 - **Live, attributed transcripts.** Per-speaker audio buffering, silence filtering, and Discord message grouping.
 - **A dedicated channel.** The bot creates `#live-transcript` when invited, streams recognized speech there, and shares a Markdown export when the meeting ends.
 - **A transcript library.** Search, preview, copy, and open saved meeting files.
-- **Optional meeting notes.** Use Ollama locally, or bring a Groq/OpenAI key for cloud transcription and summaries.
+- **Optional AI meeting summaries.** Use Ollama locally, or bring a Groq/OpenAI key for cloud transcription and summaries.
 
 ## App preview
 
 <p align="center">
-  <img src="docs/brand/app-screenshot-macos.png" alt="DisWhisper macOS AppKit companion — Home, local speech models, and a live demo transcript" width="100%">
+  <img src="docs/brand/app-screenshot-macos.png" alt="DisWhisper macOS app showing Discord connection, local Whisper model, and speaker-attributed demo transcript" width="100%">
 </p>
 
 <p align="center"><sub>The native macOS companion, captured with its built-in demo conversation. Windows uses the same workspace and visual language.</sub></p>
 
-## Windows and macOS app builds
+## Download for Windows and macOS
 
 Both native apps share the same Python core, pages, controls, and meeting workflow.
 
@@ -47,7 +48,7 @@ Both native apps share the same Python core, pages, controls, and meeting workfl
 
 Run the Windows installer, or open the Mac disk image and drag **DisWhisper.app** onto **Applications**. Both apps include their backend runtime; Python, .NET, and Homebrew are not separate installation requirements. Speech models download in the app. Mac packages target macOS 13+ and are built separately for Apple Silicon and Intel.
 
-See the [Windows quickstart](docs/windows-quickstart.md) or [Mac quickstart](docs/macos-quickstart.md) for installation and first launch. To build from source, use the matching platform and follow [CONTRIBUTING.md](CONTRIBUTING.md). See [Mac build verification](docs/macos-build-validation.md) for the checks performed. The Python core can also run on its own.
+See the [Windows quickstart](docs/windows-quickstart.md) or [Mac quickstart](docs/macos-quickstart.md) for installation and first launch. To build from source, use the matching platform and follow the [contributor guide](CONTRIBUTING.md). The Python core can also run on its own.
 
 ## Start your first meeting
 

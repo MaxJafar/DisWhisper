@@ -1,5 +1,5 @@
 """
-DisWhisper: Free, Self-Hosted Discord Meeting Transcriber powered by Whisper Large-v3.
+DisWhisper: Local Discord voice transcription with native Windows and macOS apps.
 """
 
 __version__ = "0.2.1"

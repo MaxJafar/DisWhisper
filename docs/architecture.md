@@ -1,4 +1,4 @@
-# Architecture and platform roadmap
+# DisWhisper architecture
 
 The Python core handles Discord voice ingestion, DAVE decryption, per-speaker buffers, silence gating, bounded inference queues, model downloads, Markdown exports, and optional summaries.
 
@@ -8,7 +8,7 @@ Meeting termination flushes buffered speech, drains queued inference, writes the
 
 ## Windows presentation
 
-Use native controls and transitions, Mica when supported, responsive NavigationView, consistent spacing, explicit progress/error states, and system-aware reduced motion. Keep credentials in password fields and return only credential-presence flags through IPC.
+The Windows app uses native controls and transitions, Mica when supported, responsive NavigationView, explicit progress/error states, and system-aware reduced motion. Credentials use password fields and Windows DPAPI; IPC returns only credential-presence flags.
 
 ## macOS companion
 
@@ -18,6 +18,8 @@ The process manager starts a bundled PyInstaller backend or the source `.venv`, 
 
 `requirements-macos.lock` pins Ventura-compatible native wheels, including Vosk's upstream macOS universal2 release. The build uses standalone Python instead of a Homebrew framework, bundles the PyAV wheel's Opus decoder, and audits every Mach-O library for deployment targets and external paths. The Xcode project is committed; SwiftPM runs client regression tests. See [the Mac quickstart](macos-quickstart.md).
 
-Apple Silicon inference needs a dedicated MLX/CoreML or whisper.cpp provider. The existing CTranslate2 Whisper backend supports CPU/CUDA, not Apple's MPS device. Do not label a CPU run as Neural Engine/Metal acceleration. Provider readiness, downloads, and cancellation should be validated before adding a new provider to the UI.
+Local speech inference on macOS runs on the CPU. CTranslate2 supports CPU/CUDA; the app does not currently include a Metal, CoreML, or MLX provider.
 
-The AppKit companion is implemented. Apple-specific speech acceleration remains roadmap work; current local speech runs on CPU. The arm64 build has been validated on an Apple Silicon Mac, while Intel and macOS 13 hardware still need platform-specific runtime verification.
+## Release packages
+
+The release workflow builds the Windows x64 installer and portable ZIP, plus separate macOS arm64 and x86_64 DMGs and ZIPs. Packages include their backend runtime and dependency notices; SHA-256 checksum files and matching third-party source archives accompany the binaries. CI checks the Windows install/uninstall flow and each Mac app copied from its DMG, including signature verification and backend startup/shutdown. Build instructions are in [the contributor guide](../CONTRIBUTING.md).

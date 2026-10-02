@@ -15,10 +15,13 @@ Before submitting:
 ```powershell
 .\.venv\Scripts\python -m pytest tests/ -v
 .\.venv\Scripts\python -m ruff check diswhisper tests scripts
+.\.venv\Scripts\python scripts/audit_public_source.py
 dotnet build companion/windows/DisWhisper.Companion/DisWhisper.Companion.csproj -c Release -p:Platform=x64
 ```
 
 Tests isolate developer environment settings and mock network/model calls. Add regression coverage for bugs that can lose transcripts, corrupt settings, expose credentials, or break lifecycle behavior. Keep routine presentation changes lightweight.
+
+Keep local assistant instructions, validation journals, temporary files, credentials, and meeting data out of the public repository. The publication audit checks source files for private/runtime files and credentials, and scans Git history for credential-like content. CI runs the audit on every pull request and push to `main`.
 
 ## Portable Windows release
 

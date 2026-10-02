@@ -6,4 +6,4 @@ Include the affected version, platform, steps to reproduce, and the expected/act
 
 The desktop service listens on loopback, rejects cross-origin requests and unexpected Host headers, and redacts configuration secrets. It is intended for a trusted single-user desktop. Other local processes running as your user can access the service and your transcript files.
 
-Windows DPAPI protects newly saved credentials for the Windows account. Legacy CLI .env files and other plain-text configuration must be protected by the user. Delete or replace a token in the Discord Developer Portal if it has been disclosed.
+Newly saved desktop credentials use Windows DPAPI for the current Windows account or the macOS login Keychain. CLI `.env` files and other plain-text configuration must be protected by the user. Delete or replace a token in the Discord Developer Portal if it has been disclosed.
