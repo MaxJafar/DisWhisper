@@ -5,8 +5,8 @@
 <p align="center"><sub>The native macOS companion, captured with its built-in demo conversation.</sub></p>
 
 <p align="center">
-  <a href="https://github.com/MaxJafar/DisWhisper/releases/latest"><b>Download for Windows</b></a>
-  · <a href="docs/macos-quickstart.md"><b>Build for macOS</b></a>
+  <a href="https://github.com/MaxJafar/DisWhisper/releases/latest/download/DisWhisper-0.2.1-windows-x64-setup.exe"><b>Download for Windows</b></a>
+  · <a href="https://github.com/MaxJafar/DisWhisper/releases/latest"><b>Download for macOS</b></a>
   · <a href="docs/windows-quickstart.md">Getting started</a>
   · <a href="CONTRIBUTING.md">Contribute</a>
   · <a href="LICENSE">0BSD license</a>
@@ -33,18 +33,19 @@ No subscription, account with us, or cloud API key is required for local transcr
 
 Both native apps share the same Python core, pages, controls, and meeting workflow.
 
-| App | Native UI | Build command | Portable package |
+| App | Native UI | Download | Build command |
 |---|---|---|---|
-| Windows x64 | WinUI 3 / .NET 8 | `.\scripts\build_windows.ps1` | ZIP containing `DisWhisper.Companion.exe` |
-| macOS 13+ | Swift / AppKit | `./scripts/build_macos.sh` | ZIP containing `DisWhisper.app` |
+| Windows x64 | WinUI 3 / .NET 8 | [Installer](https://github.com/MaxJafar/DisWhisper/releases/download/v0.2.1/DisWhisper-0.2.1-windows-x64-setup.exe) · [Portable ZIP](https://github.com/MaxJafar/DisWhisper/releases/download/v0.2.1/DisWhisper-0.2.1-windows-x64.zip) | `.\scripts\build_windows.ps1` |
+| Mac, Apple Silicon | Swift / AppKit | [DMG installer](https://github.com/MaxJafar/DisWhisper/releases/download/v0.2.1/DisWhisper-0.2.1-macos-arm64.dmg) · [Portable ZIP](https://github.com/MaxJafar/DisWhisper/releases/download/v0.2.1/DisWhisper-0.2.1-macos-arm64.zip) | `./scripts/build_macos.sh` |
+| Mac, Intel | Swift / AppKit | [DMG installer](https://github.com/MaxJafar/DisWhisper/releases/download/v0.2.1/DisWhisper-0.2.1-macos-x86_64.dmg) · [Portable ZIP](https://github.com/MaxJafar/DisWhisper/releases/download/v0.2.1/DisWhisper-0.2.1-macos-x86_64.zip) | `./scripts/build_macos.sh` |
 
-Build each app on its matching platform. Both portable packages include the Python backend and runtime; speech models download separately in the app. Mac packages are built separately for Apple Silicon and Intel; the Apple Silicon build is verified, and Intel verification remains pending.
+Run the Windows installer, or open the Mac disk image and drag **DisWhisper.app** onto **Applications**. Both apps include their backend runtime; Python, .NET, and Homebrew are not separate installation requirements. Speech models download in the app. Mac packages target macOS 13+ and are built separately for Apple Silicon and Intel.
 
-[Download the Windows release](https://github.com/MaxJafar/DisWhisper/releases/latest), or follow the [Mac quickstart](docs/macos-quickstart.md) to build the macOS app. See [CONTRIBUTING.md](CONTRIBUTING.md) for both build workflows and [Mac build verification](docs/macos-build-validation.md) for the checks performed. The Python core can also run on its own.
+See the [Windows quickstart](docs/windows-quickstart.md) or [Mac quickstart](docs/macos-quickstart.md) for installation and first launch. To build from source, use the matching platform and follow [CONTRIBUTING.md](CONTRIBUTING.md). See [Mac build verification](docs/macos-build-validation.md) for the checks performed. The Python core can also run on its own.
 
 ## Start your first meeting
 
-1. On Windows, [download the ZIP](https://github.com/MaxJafar/DisWhisper/releases/latest), extract the **whole folder**, and open `DisWhisper.Companion.exe`. On macOS, [prepare the Mac build](docs/macos-quickstart.md) and open `DisWhisper.app`. Each portable package includes its backend runtime.
+1. [Download the app for your platform](https://github.com/MaxJafar/DisWhisper/releases/latest). On Windows, run the installer and open DisWhisper from Start. On macOS, open the matching DMG, drag **DisWhisper.app** to **Applications**, and open it. Portable ZIPs are also available; extract the whole Windows folder.
 2. Open **Connect Discord**. Create an application and bot in the [Discord Developer Portal](https://discord.com/developers/applications), then paste the bot token into the app's password field. Never share it.
 3. **Check connection**, use **Invite bot**, and check again after adding it to your server. Select the server and speech language, then save.
 4. In **Models**, download **Whisper Base** to start, then select **Use model**. Larger Whisper models can improve recognition at the cost of download size, memory, and processing time.
@@ -56,7 +57,7 @@ The bot does not automatically listen when invited. Let participants know before
 
 **macOS requirements:** macOS 13+ and a package built for your Mac's architecture. Building from source requires Xcode 15+ and uv. Local speech processing uses the CPU; cloud providers and Ollama notes remain optional.
 
-Both apps need an internet connection for Discord and initial model downloads, plus permission to add/manage a bot in your server. Windows releases are unsigned; local Mac builds use ad-hoc signatures and are not yet notarized. Build scripts produce SHA-256 checksums alongside the ZIPs.
+Both apps need an internet connection for Discord and initial model downloads, plus permission to add/manage a bot in your server. Windows releases are unsigned; Mac builds use ad-hoc signatures and are not notarized. The quickstarts explain first-launch security prompts. Every installer and ZIP has a SHA-256 checksum on the release page.
 
 ## Choose your speech model
 

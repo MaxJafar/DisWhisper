@@ -1,4 +1,4 @@
-# Matching native audio sources for DisWhisper 0.2.0 macOS
+# Matching native audio sources for DisWhisper 0.2.1 macOS
 
 The macOS portable app uses the upstream PyAV 15.1.0 CPython 3.12 wheel for
 the build architecture. Its `scripts/ffmpeg-7.1.json` pins the PyAV-Org/

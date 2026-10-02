@@ -81,7 +81,7 @@ def main():
         for name, content in notices(source):
             (folder / name).write_bytes(content)
     args.archive.parent.mkdir(parents=True, exist_ok=True)
-    prefix = "DisWhisper-0.2.0-third-party-source/"
+    prefix = args.archive.stem + "/"
     with zipfile.ZipFile(args.archive, "w", compression=zipfile.ZIP_DEFLATED) as output:
         for source in sources:
             output.write(source, prefix + "archives/" + source.name)

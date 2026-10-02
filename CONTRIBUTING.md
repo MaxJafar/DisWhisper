@@ -22,19 +22,19 @@ Tests isolate developer environment settings and mock network/model calls. Add r
 
 ## Portable Windows release
 
-On Windows x64 with Python 3.12 and the .NET 8 SDK:
+On Windows x64 with Python 3.12, the .NET 8 SDK, and Inno Setup 6.3+:
 
 ```powershell
 .\scripts\build_windows.ps1
 ```
 
-The script creates an isolated build environment from `requirements-windows.lock`, runs the tests, publishes a self-contained WinUI app, freezes the backend with PyInstaller, collects dependency notices and matching native-library sources, and creates ZIPs plus SHA-256 checksums in `dist/`. Model weights, private configuration, logs, transcripts, and GPU libraries are excluded. Publish both the portable and third-party source archives; see THIRD_PARTY_NOTICES.md for the combined binary license.
+The script creates an isolated build environment from `requirements-windows.lock`, runs the tests, publishes a self-contained WinUI app, freezes the backend with PyInstaller, collects dependency notices and matching native-library sources, and creates an installer, ZIPs, and SHA-256 checksums in `dist/`. The installer uses a per-user app folder and supports Start menu/desktop shortcuts and uninstall. Model weights, private configuration, logs, transcripts, and GPU libraries are excluded. Publish both the portable and third-party source archives; see THIRD_PARTY_NOTICES.md for the combined binary license.
 
-The `release.yml` workflow performs the same build for version tags or a manual workflow run. A manual run produces artifacts; version tags publish a GitHub release. The current release is unsigned.
+The shared `release.yml` workflow builds Windows, Apple Silicon, and Intel packages, checks their installation and checksums, and publishes only after all jobs pass. Version tags publish a release; manual runs default to artifacts, with an explicit **publish_release** option to publish from the tested commit. Release notes live in `docs/releases/v<VERSION>.md`, and the tag must match `pyproject.toml`. Windows packages are unsigned.
 
 ## Portable macOS build
 
-Run `scripts/build_macos.sh` on a Mac with Xcode 15+ and uv. It creates an isolated Python 3.12 environment from `requirements-macos.lock`, runs Python and Swift tests, builds the AppKit `.app`, bundles the frozen backend, audits Ventura compatibility and library paths, exercises its local API, collects notices and matching source archives, and creates a ZIP and checksum in `dist/`. Run on each architecture for arm64 and Intel packages. `--app-only` builds a source-development UI; `--skip-install` reuses a prepared packaging environment.
+Run `scripts/build_macos.sh` on a Mac with Xcode 15+ and uv. It creates an isolated Python 3.12 environment from `requirements-macos.lock`, runs Python and Swift tests, builds the AppKit `.app`, bundles the frozen backend, audits Ventura compatibility and library paths, exercises its local API, collects notices and matching source archives, and creates a disk image, ZIP, and checksums in `dist/`. Run on each architecture for arm64 and Intel packages. `--app-only` builds a source-development UI; `--skip-install` reuses a prepared packaging environment. `scripts/smoke_macos_installer.sh` copies the app from its DMG, detaches the image, and tests the installed backend.
 
 Local builds use ad-hoc signatures. Publishing a notarized Mac release requires the maintainer's Apple Developer ID and notarization credentials. The manual `macos-build.yml` workflow creates downloadable build artifacts without publishing a release. See [docs/macos-quickstart.md](docs/macos-quickstart.md).
 

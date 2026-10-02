@@ -1,7 +1,7 @@
 # DisWhisper for Windows
 
-1. Extract the entire ZIP to a folder you want to keep.
-2. Open **DisWhisper.Companion.exe**. The first launch starts a local service; no Python or .NET installation is needed.
+1. Download **DisWhisper-0.2.1-windows-x64-setup.exe** from the [latest release](https://github.com/MaxJafar/DisWhisper/releases/latest) and run it. The installer uses your account's app folder, adds a Start menu entry, and offers a desktop shortcut. Alternatively, extract the entire portable ZIP to a folder you want to keep.
+2. Open **DisWhisper** from Start, or **DisWhisper.Companion.exe** in the portable folder. The first launch starts a local service; no Python or .NET installation is needed.
 3. In **Connect Discord**, open the Discord Developer Portal and create your own bot. Paste its token into the app, check the connection, invite it, and check again. Choose the server and language.
 4. In **Models**, download Whisper Base, then choose **Use model**.
 5. Connect the bot from **Home**, enter a Discord voice channel, and type **/join**.
@@ -10,6 +10,8 @@
 The bot automatically creates **#live-transcript** if it has Manage Channels permission. No Administrator or privileged gateway intents are needed.
 
 **Closing the window keeps DisWhisper in the tray.** Right-click the tray icon to show the app or quit. Quit finishes an active meeting before stopping the service. You can run **Create desktop shortcut.ps1** from the extracted folder to add a desktop shortcut.
+
+The installer is unsigned, so Windows may display an unknown-publisher or reputation prompt. Download from the official release page and verify the provided SHA-256 checksum before proceeding. To update, quit DisWhisper and run the new installer. Uninstall from Windows Settings → Apps; your separately stored transcripts, models, and configuration remain available.
 
 Configuration, transcripts, logs, and models live in **%LOCALAPPDATA%\DisWhisper\Data**, separate from the extracted app. Updating the portable folder preserves your data. Keep only one production instance open.
 

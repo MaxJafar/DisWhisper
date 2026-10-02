@@ -1,13 +1,44 @@
-name: Windows release
+name: Desktop release
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the tested Windows and macOS packages as a release
+        type: boolean
+        default: false
   push:
     tags: ['v*']
 permissions:
-  contents: write
+  contents: read
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
-  portable:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - id: version
+        name: Validate the release version and notes
+        env:
+          RELEASE_REF_TYPE: ${{ github.ref_type }}
+          RELEASE_REF_NAME: ${{ github.ref_name }}
+        run: |
+          release_version=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          [[ "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if [[ "$RELEASE_REF_TYPE" == tag && "$RELEASE_REF_NAME" != "v$release_version" ]]; then
+            echo "The tag must match the project version." >&2
+            exit 1
+          fi
+          test -f "docs/releases/v$release_version.md"
+          echo "version=$release_version" >> "$GITHUB_OUTPUT"
+  windows:
+    needs: version
     runs-on: windows-latest
+    env:
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-python@v7.0.0
@@ -16,28 +47,89 @@ jobs:
       - uses: actions/setup-dotnet@v6.0.0
         with:
           dotnet-version: '8.0.x'
-      - name: Build and test the portable package
+      - name: Build and test Windows packages
         shell: pwsh
         run: ./scripts/build_windows.ps1
-      - name: Smoke-test the frozen service
+      - name: Test installation, the installed backend, and uninstall
         shell: pwsh
-        run: python scripts/smoke_release.py dist/DisWhisper-0.2.0-windows-x64/backend/diswhisper-backend.exe
+        run: ./scripts/smoke_windows_installer.ps1 -Version $env:RELEASE_VERSION
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: DisWhisper-windows-x64
           path: |
+            dist/*.exe
             dist/*.zip
             dist/*.sha256
-      - name: Publish a tagged release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          if-no-files-found: error
+  macos:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    name: macOS (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    env:
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
+      RELEASE_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install the build tool
+        run: python -m pip install uv
+      - name: Build and test macOS packages
         run: |
-          gh release view ${{ github.ref_name }} --repo ${{ github.repository }}
-          if ($LASTEXITCODE -ne 0) {
-            gh release create ${{ github.ref_name }} --repo ${{ github.repository }} --verify-tag --generate-notes
-            if ($LASTEXITCODE -ne 0) { throw "Release creation failed." }
-          }
-          gh release upload ${{ github.ref_name }} dist/*.zip dist/*.sha256 --repo ${{ github.repository }} --clobber
-          if ($LASTEXITCODE -ne 0) { throw "Release upload failed." }
+          test "$(uname -m)" = "$RELEASE_ARCH"
+          ./scripts/build_macos.sh
+      - name: Test installation from the disk image
+        run: ./scripts/smoke_macos_installer.sh "dist/DisWhisper-$RELEASE_VERSION-macos-$RELEASE_ARCH.dmg"
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: DisWhisper-macos-${{ matrix.arch }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+  publish:
+    needs: [version, windows, macos]
+    if: startsWith(github.ref, 'refs/tags/') || inputs.publish_release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: DisWhisper-*
+          merge-multiple: true
+          path: release-assets
+      - name: Verify every package and checksum
+        run: python scripts/verify_release_assets.py release-assets --version "$RELEASE_VERSION"
+      - name: Publish the complete release
+        run: |
+          release_tag="v$RELEASE_VERSION"
+          if git rev-parse --verify "refs/tags/$release_tag^{commit}" >/dev/null 2>&1; then
+            test "$(git rev-parse "refs/tags/$release_tag^{commit}")" = "$GITHUB_SHA"
+          fi
+          if ! gh release view "$release_tag" >/dev/null 2>&1; then
+            gh release create "$release_tag" --draft --target "$GITHUB_SHA" \
+              --title "DisWhisper $RELEASE_VERSION — macOS and Windows" \
+              --notes-file "docs/releases/$release_tag.md"
+          fi
+          gh release upload "$release_tag" release-assets/* --clobber
+          gh release edit "$release_tag" --draft=false --latest \
+            --title "DisWhisper $RELEASE_VERSION — macOS and Windows" \
+            --notes-file "docs/releases/$release_tag.md"

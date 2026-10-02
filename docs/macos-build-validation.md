@@ -16,4 +16,6 @@ The Apple Silicon package was built and checked on macOS 26.6.2 with Xcode 26.5,
 
 The speech sample said: “This is a local transcription test. The Mac application saves clear meeting notes and keeps every conversation organized.” The packaged engine returned that text, language `en`, and device `cpu`. Test audio, model weights, and validation profiles are outside the release bundle.
 
-The deployment audit checks binary compatibility requirements. Runtime testing on macOS 13 and Intel hardware, live Discord voice reception, and authenticated cloud-provider calls remain unverified. The package has an ad-hoc signature; it is not notarized or published as a GitHub release. See [the quickstart](macos-quickstart.md) for setup, builds, and data storage.
+These local checks cover Apple Silicon. The shared release workflow additionally builds on separate arm64 and Intel Mac runners, copies each app from its DMG, detaches the disk image, and checks the copied app's signature and backend startup/shutdown. Publication waits for both Mac builds and the Windows installer checks to pass.
+
+The deployment audit checks binary compatibility requirements. Runtime testing on macOS 13, live Discord voice reception, and authenticated cloud-provider calls remain unverified. The packages have ad-hoc signatures and are not notarized. See [the quickstart](macos-quickstart.md) for installation, builds, and data storage.

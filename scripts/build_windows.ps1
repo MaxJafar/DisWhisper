@@ -8,7 +8,9 @@ $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $buildEnvironment = Join-Path $projectRoot ".cache\package-venv"
 $packagePython = Join-Path $buildEnvironment "Scripts\python.exe"
-$releaseDirectory = Join-Path $projectRoot "dist\DisWhisper-0.2.0-windows-x64"
+$releaseVersion = [regex]::Match((Get-Content -LiteralPath (Join-Path $projectRoot "pyproject.toml") -Raw), '(?m)^version\s*=\s*"(\d+\.\d+\.\d+)"\s*$').Groups[1].Value
+if (-not $releaseVersion) { throw "Invalid project release version." }
+$releaseDirectory = Join-Path $projectRoot "dist\DisWhisper-$releaseVersion-windows-x64"
 $backendDirectory = Join-Path $projectRoot ".cache\frozen-backend"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 $env:PYTHONUTF8 = "1"
@@ -27,7 +29,7 @@ try {
     & $packagePython -m pytest tests/ -v
     if ($LASTEXITCODE -ne 0) { throw "Tests failed. Release stopped." }
     # Only remove the verified generated release folder, never app data or source.
-    $expectedRelease = [IO.Path]::GetFullPath((Join-Path $projectRoot "dist\DisWhisper-0.2.0-windows-x64"))
+    $expectedRelease = [IO.Path]::GetFullPath((Join-Path $projectRoot "dist\DisWhisper-$releaseVersion-windows-x64"))
     if ([IO.Path]::GetFullPath($releaseDirectory) -ne $expectedRelease -or -not $expectedRelease.StartsWith($projectRoot + [IO.Path]::DirectorySeparatorChar)) { throw "Unexpected release output path." }
     if (Test-Path -LiteralPath $releaseDirectory) { Remove-Item -LiteralPath $releaseDirectory -Recurse -Force }
     $appBuildDirectory = Join-Path $projectRoot ".cache\release-app-build\"
@@ -47,7 +49,7 @@ try {
     $pythonLicense = & $packagePython -c "import sys; from pathlib import Path; print(Path(sys.base_prefix) / 'LICENSE.txt')"
     if (-not (Test-Path -LiteralPath $pythonLicense)) { throw "Python license file is missing." }
     Copy-Item -LiteralPath $pythonLicense -Destination (Join-Path $releaseDirectory "licenses\python\PYTHON_LICENSE.txt") -Force
-    & $packagePython scripts/collect_native_sources.py (Join-Path $releaseDirectory "licenses\native") (Join-Path $projectRoot "dist\DisWhisper-0.2.0-third-party-source.zip")
+    & $packagePython scripts/collect_native_sources.py (Join-Path $releaseDirectory "licenses\native") (Join-Path $projectRoot "dist\DisWhisper-$releaseVersion-windows-third-party-source.zip")
     if ($LASTEXITCODE -ne 0) { throw "Native-library source or notice collection failed." }
     Copy-Item -LiteralPath (Join-Path $projectRoot ".cache\vendor-sources\GPL-3.0.txt") -Destination (Join-Path $releaseDirectory "COPYING.GPL3.txt") -Force
     $nugetPackages = Join-Path $env:USERPROFILE ".nuget\packages"
@@ -66,6 +68,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Archive creation failed." }
     $checksum = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     "$checksum  $([IO.Path]::GetFileName($archive))" | Set-Content -LiteralPath "$archive.sha256" -Encoding ascii
+    & (Join-Path $PSScriptRoot "build_windows_installer.ps1") -Version $releaseVersion
     Write-Host "Release ready: $archive" -ForegroundColor Green
 }
 finally { Pop-Location }

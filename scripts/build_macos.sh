@@ -14,7 +14,9 @@ for option in "$@"; do
 done
 if [[ "$(uname -s)" != "Darwin" ]]; then echo "Build on macOS with Xcode 15 or newer." >&2; exit 1; fi
 DISWHISPER_ARCH="$(uname -m)"
-DISWHISPER_RELEASE="dist/DisWhisper-0.2.0-macos-$DISWHISPER_ARCH"
+DISWHISPER_VERSION="$(sed -nE 's/^version = "([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' pyproject.toml)"
+if [[ ! "$DISWHISPER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "Invalid project release version." >&2; exit 1; fi
+DISWHISPER_RELEASE="dist/DisWhisper-$DISWHISPER_VERSION-macos-$DISWHISPER_ARCH"
 DISWHISPER_APP="$DISWHISPER_RELEASE/DisWhisper.app"
 DISWHISPER_ENV=".cache/macos-package-venv"
 DISWHISPER_PYTHON="$DISWHISPER_ENV/bin/python"
@@ -61,7 +63,7 @@ if ! $DISWHISPER_APP_ONLY; then
     cp "$DISWHISPER_PYTHON_LICENSE" "$DISWHISPER_APP/Contents/Resources/licenses/python/PYTHON_LICENSE.txt"
     "$DISWHISPER_PYTHON" scripts/collect_native_sources.py \
         "$DISWHISPER_APP/Contents/Resources/licenses/native" \
-        "dist/DisWhisper-0.2.0-macos-third-party-source.zip" --manifest packaging/vendor-sources-macos.json
+        "dist/DisWhisper-$DISWHISPER_VERSION-macos-$DISWHISPER_ARCH-third-party-source.zip" --manifest packaging/vendor-sources-macos.json
     "$DISWHISPER_PYTHON" scripts/audit_macos_bundle.py "$DISWHISPER_APP"
     "$DISWHISPER_PYTHON" scripts/smoke_release.py "$DISWHISPER_APP/Contents/Resources/backend/diswhisper-backend"
 fi
@@ -71,6 +73,7 @@ if $DISWHISPER_APP_ONLY; then
     echo "AppKit-only build ready: $DISWHISPER_APP (requires the source backend)."
 else
     ditto -c -k --sequesterRsrc --keepParent "$DISWHISPER_RELEASE" "$DISWHISPER_RELEASE.zip"
-    (cd dist && shasum -a 256 "DisWhisper-0.2.0-macos-$DISWHISPER_ARCH.zip") > "$DISWHISPER_RELEASE.zip.sha256"
+    (cd dist && shasum -a 256 "DisWhisper-$DISWHISPER_VERSION-macos-$DISWHISPER_ARCH.zip") > "$DISWHISPER_RELEASE.zip.sha256"
+    ./scripts/create_macos_dmg.sh "$DISWHISPER_RELEASE" "$DISWHISPER_RELEASE.dmg"
     echo "Portable macOS build ready: $DISWHISPER_RELEASE.zip"
 fi
