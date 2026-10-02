@@ -1,9 +1,12 @@
 <p align="center">
-  <img src="docs/brand/readme-cover.png" alt="DisWhisper — Your conversations, written. Free, local, open source." width="100%">
+  <img src="docs/brand/readme-cover.png" alt="DisWhisper macOS AppKit companion — Home, local speech models, and a live demo transcript" width="100%">
 </p>
+
+<p align="center"><sub>The native macOS companion, captured with its built-in demo conversation.</sub></p>
 
 <p align="center">
   <a href="https://github.com/MaxJafar/DisWhisper/releases/latest"><b>Download for Windows</b></a>
+  · <a href="docs/macos-quickstart.md"><b>Build for macOS</b></a>
   · <a href="docs/windows-quickstart.md">Getting started</a>
   · <a href="CONTRIBUTING.md">Contribute</a>
   · <a href="LICENSE">0BSD license</a>
@@ -11,13 +14,14 @@
 
 # Your conversations, written.
 
-**DisWhisper is a free, local Discord voice transcriber with a native Windows app.** Bring your own Discord bot, download a speech model, and keep a readable record of your conversations.
+**DisWhisper is a free, local Discord voice transcriber with native Windows and macOS apps.** Bring your own Discord bot, download a speech model, and keep a readable record of your conversations.
 
-No subscription, account with us, or cloud API key is required for local transcription. Your PC runs the speech model. Discord still carries the call and any transcripts the bot posts.
+No subscription, account with us, or cloud API key is required for local transcription. Your computer runs the speech model. Discord still carries the call and any transcripts the bot posts.
 
 ## A complete little workspace
 
 - **Native Windows app.** Mica, light and dark themes, responsive navigation, keyboard shortcuts, restrained motion, and a tray icon. Closing the window keeps the bot running.
+- **Native macOS app.** Swift and AppKit, the same workspace and violet visual language, a translucent split-view sidebar, light/dark themes, ⌘1–4 navigation, and a menu-bar companion. Closing the window keeps the bot running.
 - **Guided Discord setup.** Check your own bot, invite it with the required permissions, pick a server and language, and connect from Home.
 - **Download models in the app.** Whisper from tiny to large-v3-turbo, SenseVoice, and compact Vosk models for English, Russian, German, and Turkish. Switch providers without editing source code.
 - **Live, attributed transcripts.** Per-speaker audio buffering, silence filtering, and Discord message grouping.
@@ -25,11 +29,22 @@ No subscription, account with us, or cloud API key is required for local transcr
 - **A transcript library.** Search, preview, copy, and open saved meeting files.
 - **Optional meeting notes.** Use Ollama locally, or bring a Groq/OpenAI key for cloud transcription and summaries.
 
-Windows x64 is the packaged desktop release. The Python core can run separately on supported Python platforms. A native Swift/AppKit macOS companion is [planned](docs/architecture.md), not shipped yet.
+## Windows and macOS app builds
+
+Both native apps share the same Python core, pages, controls, and meeting workflow.
+
+| App | Native UI | Build command | Portable package |
+|---|---|---|---|
+| Windows x64 | WinUI 3 / .NET 8 | `.\scripts\build_windows.ps1` | ZIP containing `DisWhisper.Companion.exe` |
+| macOS 13+ | Swift / AppKit | `./scripts/build_macos.sh` | ZIP containing `DisWhisper.app` |
+
+Build each app on its matching platform. Both portable packages include the Python backend and runtime; speech models download separately in the app. Mac packages are built separately for Apple Silicon and Intel; the Apple Silicon build is verified, and Intel verification remains pending.
+
+[Download the Windows release](https://github.com/MaxJafar/DisWhisper/releases/latest), or follow the [Mac quickstart](docs/macos-quickstart.md) to build the macOS app. See [CONTRIBUTING.md](CONTRIBUTING.md) for both build workflows and [Mac build verification](docs/macos-build-validation.md) for the checks performed. The Python core can also run on its own.
 
 ## Start your first meeting
 
-1. [Download the Windows ZIP](https://github.com/MaxJafar/DisWhisper/releases/latest) and extract the **whole folder**. Open `DisWhisper.Companion.exe`. Python and .NET are included in the portable package.
+1. On Windows, [download the ZIP](https://github.com/MaxJafar/DisWhisper/releases/latest), extract the **whole folder**, and open `DisWhisper.Companion.exe`. On macOS, [prepare the Mac build](docs/macos-quickstart.md) and open `DisWhisper.app`. Each portable package includes its backend runtime.
 2. Open **Connect Discord**. Create an application and bot in the [Discord Developer Portal](https://discord.com/developers/applications), then paste the bot token into the app's password field. Never share it.
 3. **Check connection**, use **Invite bot**, and check again after adding it to your server. Select the server and speech language, then save.
 4. In **Models**, download **Whisper Base** to start, then select **Use model**. Larger Whisper models can improve recognition at the cost of download size, memory, and processing time.
@@ -37,9 +52,11 @@ Windows x64 is the packaged desktop release. The Python core can run separately 
 
 The bot does not automatically listen when invited. Let participants know before starting transcription. You can disable completed-transcript sharing, automatic channel creation, local exports, or automatic connection in Settings.
 
-**Requirements:** Windows 10 (2004+) or Windows 11, x64, an internet connection for Discord and initial downloads, and permission to add/manage a bot in your server. CPU inference is supported. NVIDIA acceleration needs compatible CUDA 12 cuBLAS and cuDNN 9 libraries; the app falls back to CPU when those libraries are unavailable. The package does not bundle GPU libraries or speech-model weights.
+**Windows requirements:** Windows 10 (2004+) or Windows 11, x64. CPU inference is supported. NVIDIA acceleration needs compatible CUDA 12 cuBLAS and cuDNN 9 libraries; the app falls back to CPU when those libraries are unavailable. You can point Settings → Advanced to an existing NVIDIA runtime folder. GPU libraries are not bundled.
 
-You can point Settings → Advanced to an existing NVIDIA runtime folder. The portable binaries are not code-signed. See [build instructions](CONTRIBUTING.md) and release SHA-256 checksums if you prefer to build or verify them yourself.
+**macOS requirements:** macOS 13+ and a package built for your Mac's architecture. Building from source requires Xcode 15+ and uv. Local speech processing uses the CPU; cloud providers and Ollama notes remain optional.
+
+Both apps need an internet connection for Discord and initial model downloads, plus permission to add/manage a bot in your server. Windows releases are unsigned; local Mac builds use ad-hoc signatures and are not yet notarized. Build scripts produce SHA-256 checksums alongside the ZIPs.
 
 ## Choose your speech model
 
@@ -75,11 +92,14 @@ The desktop app stores configuration, downloaded models, logs, and transcripts u
 
 ```text
 %LOCALAPPDATA%\DisWhisper\Data
+# macOS:
+~/Library/Application Support/DisWhisper/Data
 ```
 
 - Speech chunks are buffered in memory; the app does not save raw call recordings.
 - Saved transcripts are Markdown files in `Data\transcripts`. Local files survive a Discord upload failure.
 - Newly saved Discord tokens and API keys use Windows DPAPI for the current Windows account. Existing plain-text CLI `.env` files remain your responsibility.
+- On macOS, newly saved credentials use the login Keychain. `config.json` contains opaque references, and replaced/failed saves clean up their Keychain entries.
 - The local HTTP/WebSocket service binds to loopback at `127.0.0.1:8765`, rejects cross-origin requests and unexpected Host headers, and never returns secret values.
 - Hugging Face downloads fetch public model files; its optional telemetry and implicit account-token use are disabled in the packaged app.
 - Local speech inference works without a cloud STT service. Discord receives messages and files posted by your bot. Selecting a cloud speech provider sends audio there; selecting cloud notes sends transcript text there.
@@ -100,6 +120,15 @@ python -m venv .venv
 .\scripts\run_companion.bat
 ```
 
+On macOS with Xcode 15+ and uv:
+
+```bash
+./scripts/setup_macos.sh
+./scripts/run_macos.sh
+# Portable AppKit app + embedded Python backend:
+./scripts/build_macos.sh
+```
+
 The companion manages the backend and uses its own app-data configuration. For a separate CLI bot, copy `.env.example` to `.env`, set your token, and run:
 
 ```powershell
@@ -108,13 +137,13 @@ The companion manages the backend and uses its own app-data configuration. For a
 
 CLI configuration priority is environment/`.env`, then `config.json`, then defaults. JSON can be based on `config.json.example`. Keep private configuration and meeting files out of commits.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for release builds, [the API reference](docs/api.md) for companion integrations, and [the architecture](docs/architecture.md) for the macOS plan.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for release builds, [the API reference](docs/api.md) for companion integrations, and [the architecture](docs/architecture.md) for both native companions.
 
 ## License and community
 
 DisWhisper source and original branding are released under **[Zero-Clause BSD (0BSD)](LICENSE)**. You may use, copy, modify, and distribute them for any purpose, with or without a fee, without an attribution requirement. The license includes the usual warranty disclaimer.
 
-Dependencies, fonts supplied by your OS, and downloaded models retain their own licenses. The Windows portable application includes GPL audio codecs and is distributed as a combined work under GPL-3.0-or-later. Its [release page](https://github.com/MaxJafar/DisWhisper/releases/latest) includes corresponding third-party sources; project source remains available under 0BSD. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Dependencies, fonts supplied by your OS, and downloaded models retain their own licenses. The Windows and macOS portable applications include GPL audio codecs and are distributed as combined works under GPL-3.0-or-later. Windows releases and the Mac build script provide corresponding third-party source archives; project source remains available under 0BSD. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Bug reports, accessibility feedback, and contributions are welcome. Use the [issue tracker](https://github.com/MaxJafar/DisWhisper/issues) for product bugs and [SECURITY.md](SECURITY.md) for private security reports.
 

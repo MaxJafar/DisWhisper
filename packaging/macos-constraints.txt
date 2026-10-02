@@ -1,0 +1,6 @@
+# Keep every native runtime compatible with macOS 13 (Ventura).
+# Newer wheels of these packages require macOS 14 even though AppKit targets 13.
+av==15.1.0
+numpy==1.26.4
+onnxruntime==1.19.2
+vosk==0.3.44

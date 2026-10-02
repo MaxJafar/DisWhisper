@@ -13,7 +13,8 @@ from urllib.request import Request, urlopen
 
 def main():
     executable = Path(sys.argv[1]).resolve()
-    subprocess.run([str(executable), "--check-native"], check=True, timeout=30)
+    # First-launch macOS code assessment can scan the complete native library bundle.
+    subprocess.run([str(executable), "--check-native"], check=True, timeout=90)
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]

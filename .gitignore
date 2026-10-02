@@ -46,6 +46,9 @@ huggingface/
 **/bin/
 **/obj/
 .vs/
+.build/
+**/xcuserdata/
+*.xcuserstate
 
 # IDE & OS
 .vscode/

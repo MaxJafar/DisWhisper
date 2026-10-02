@@ -1,0 +1,22 @@
+name: macOS portable build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install uv
+      - run: ./scripts/build_macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: diswhisper-macos
+          path: |
+            dist/DisWhisper-*-macos-*.zip
+            dist/DisWhisper-*-macos-*.sha256
+          if-no-files-found: error

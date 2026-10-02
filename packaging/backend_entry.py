@@ -1,6 +1,12 @@
-"""Standalone backend entry point used by the Windows portable release."""
+"""Standalone backend entry point used by Windows and macOS portable releases."""
 import os
 import sys
+from multiprocessing import freeze_support
+
+# Frozen speech libraries can spawn Python resource/worker processes on macOS.
+# Route those helpers before importing the CLI or loading native speech engines.
+if __name__ == "__main__":
+    freeze_support()
 
 for stream in (sys.stdout, sys.stderr):
     if stream is not None and hasattr(stream, "reconfigure"):
@@ -20,9 +26,12 @@ if __name__ == "__main__":
 
         import discord.opus
 
+        from diswhisper.audio.opus import ensure_opus_loaded
+
         for provider in ("davey", "sherpa_onnx", "vosk"):
             importlib.import_module(provider)
 
+        ensure_opus_loaded()
         decoder = discord.opus.Decoder()
         print("Native speech and Discord voice libraries loaded.")
         del decoder

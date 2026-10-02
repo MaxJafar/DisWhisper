@@ -15,7 +15,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
 
-from diswhisper.secrets import protect, unprotect
+from diswhisper.secrets import MACOS_PREFIX, forget, protect, unprotect
 
 
 class Config(BaseModel):
@@ -352,10 +352,17 @@ def save_config_updates(config: Config, updates: dict) -> Config:
     if not isinstance(existing, dict):
         raise ValueError("Configuration file must contain a JSON object")
     normalized = candidate.model_dump()
-    existing.update({key: protect(normalized[key]) if key in SECRET_FIELDS and normalized[key] else normalized[key] for key in updates})
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = None
+    replaced = [existing.get(key) for key in updates if key in SECRET_FIELDS]
+    created = []
     try:
+        for key in updates:
+            value = normalized[key]
+            saved = protect(value) if key in SECRET_FIELDS and value else value
+            existing[key] = saved
+            if key in SECRET_FIELDS and isinstance(saved, str) and saved.startswith(MACOS_PREFIX):
+                created.append(saved)
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
@@ -366,10 +373,17 @@ def save_config_updates(config: Config, updates: dict) -> Config:
             temp_path = Path(file.name)
             json.dump(existing, file, indent=2)
             file.write("\n")
-        os.replace(temp_path, path)
         if os.name != "nt":
-            path.chmod(0o600)
+            temp_path.chmod(0o600)
+        os.replace(temp_path, path)
+    except Exception:
+        for value in created:
+            forget(value)
+        raise
     finally:
         if temp_path and temp_path.exists():
             temp_path.unlink()
+    for value in replaced:
+        if value not in created:
+            forget(value)
     return candidate

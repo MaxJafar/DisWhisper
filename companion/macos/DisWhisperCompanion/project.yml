@@ -1,0 +1,46 @@
+name: DisWhisperCompanion
+options:
+  deploymentTarget:
+    macOS: "13.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    PRODUCT_BUNDLE_IDENTIFIER: org.diswhisper.companion
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+targets:
+  DisWhisperCompanion:
+    type: application
+    platform: macOS
+    sources:
+      - Sources
+    resources:
+      - Resources/Assets.xcassets
+      - Resources/Logo.png
+    info:
+      path: Resources/Info.plist
+      properties:
+        CFBundleDisplayName: DisWhisper
+        CFBundleName: DisWhisper
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSHighResolutionCapable: true
+        NSPrincipalClass: NSApplication
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        LSApplicationCategoryType: public.app-category.productivity
+    settings:
+      base:
+        PRODUCT_NAME: DisWhisper
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_APP_SANDBOX: NO
+schemes:
+  DisWhisperCompanion:
+    build:
+      targets:
+        DisWhisperCompanion: all
+    run:
+      config: Debug

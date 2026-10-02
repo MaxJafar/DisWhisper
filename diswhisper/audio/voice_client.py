@@ -74,6 +74,9 @@ class DisWhisperVoiceClient(voice_recv.VoiceRecvClient):
             raise TypeError("sink must be a voice-recv AudioSink")
         if self.is_listening():
             raise discord.ClientException("Already receiving audio")
+        from diswhisper.audio.opus import ensure_opus_loaded
+
+        ensure_opus_loaded()
         reader = AudioReader(sink, self, after=after)
         reader.packet_router = _PacketRouter(sink, reader)
         self._reader = reader

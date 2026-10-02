@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "diswhisper"
 version = "0.2.0"
-description = "Free local Discord transcription with a native Windows companion"
+description = "Free local Discord transcription with native Windows and macOS companions"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "0BSD" }
@@ -38,7 +38,8 @@ dependencies = [
     "pydantic>=2.0.0",
     "aiohttp>=3.9.0",
     "huggingface-hub>=1.33.0,<2",
-    "vosk>=0.3.45",
+    "vosk>=0.3.45; sys_platform != 'darwin'",
+    "vosk==0.3.44; sys_platform == 'darwin'",
 ]
 
 [project.optional-dependencies]

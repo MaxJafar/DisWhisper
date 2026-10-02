@@ -66,8 +66,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("licenses", type=Path)
     parser.add_argument("archive", type=Path)
+    parser.add_argument("--manifest", type=Path, default=ROOT / "packaging/vendor-sources.json")
     args = parser.parse_args()
-    manifest_path = ROOT / "packaging/vendor-sources.json"
+    manifest_path = args.manifest.resolve()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     cache = ROOT / ".cache/vendor-sources"
     cache.mkdir(parents=True, exist_ok=True)

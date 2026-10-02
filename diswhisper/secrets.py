@@ -1,13 +1,15 @@
-"""Protect credentials stored by the Windows app with the current user's DPAPI key."""
+"""Protect desktop credentials with Windows DPAPI or the macOS login Keychain."""
 
 from __future__ import annotations
 
 import base64
 import ctypes
 import sys
+import uuid
 from ctypes import wintypes
 
 PREFIX = "dpapi:v1:"
+MACOS_PREFIX = "keychain:v1:"
 
 
 def _transform(value: bytes, *, decrypt: bool) -> bytes:
@@ -33,12 +35,30 @@ def _transform(value: bytes, *, decrypt: bool) -> bytes:
 
 
 def protect(value: str) -> str:
-    if not value or sys.platform != "win32" or value.startswith(PREFIX):
+    if not value or value.startswith((PREFIX, MACOS_PREFIX)):
+        return value
+    if sys.platform == "darwin":
+        from diswhisper.macos_keychain import store
+
+        account = str(uuid.uuid4())
+        store(account, value)
+        return MACOS_PREFIX + account
+    if sys.platform != "win32":
         return value
     return PREFIX + base64.b64encode(_transform(value.encode("utf-8"), decrypt=False)).decode("ascii")
 
 
 def unprotect(value: str) -> str:
+    if value.startswith(MACOS_PREFIX):
+        if sys.platform != "darwin":
+            raise ValueError("This credential belongs to a Mac login Keychain. Enter it again on this computer.")
+        from diswhisper.macos_keychain import read
+
+        try:
+            account = str(uuid.UUID(value[len(MACOS_PREFIX):]))
+            return read(account)
+        except (ValueError, OSError, UnicodeError):
+            raise ValueError("This saved credential cannot be unlocked. Enter it again in the companion.") from None
     if not value.startswith(PREFIX):
         return value
     if sys.platform != "win32":
@@ -47,3 +67,15 @@ def unprotect(value: str) -> str:
         return _transform(base64.b64decode(value[len(PREFIX):], validate=True), decrypt=True).decode("utf-8")
     except (ValueError, OSError, UnicodeError):
         raise ValueError("This saved credential cannot be unlocked. Enter the token again in Connect Discord.") from None
+
+
+def forget(value: str | None) -> None:
+    """Remove superseded Keychain entries after a config write, or roll back a failed write."""
+    if sys.platform == "darwin" and isinstance(value, str) and value.startswith(MACOS_PREFIX):
+        from diswhisper.macos_keychain import delete
+
+        try:
+            delete(str(uuid.UUID(value[len(MACOS_PREFIX):])))
+        except (ValueError, OSError):
+            # Cleanup failure must not invalidate an already committed configuration.
+            pass

@@ -8,6 +8,8 @@ The Windows package includes FFmpeg 8.0.1 shared libraries from PyAV 16.1.0, inc
 
 The [same release page](https://github.com/MaxJafar/DisWhisper/releases) provides `DisWhisper-0.2.0-third-party-source.zip`: matching source archives, upstream build scripts and patches, checksums, and the FFmpeg configure line. DisWhisper's own corresponding source is the release's tagged GitHub source archive. Native libraries are separate DLLs in `backend/_internal/av.libs`, so rebuilt compatible DLLs can replace them. See `packaging/vendor-sources.json` for exact upstream sources and versions. Keep the source download and notices available when redistributing the binaries.
 
+macOS portable builds keep their notices in `DisWhisper.app/Contents/Resources/licenses/`. Their pinned runtime is in `requirements-macos.lock`, and their native audio manifest is `packaging/vendor-sources-macos.json`. For Ventura compatibility the Mac package uses PyAV 15.1.0 with FFmpeg 7.1.1 from the upstream 7.1.1-6 vendor recipe. Its x264/x265 and audio codecs also make the combined portable Mac application **GPL-3.0-or-later**, while original DisWhisper source remains 0BSD. `scripts/build_macos.sh` produces `DisWhisper-0.2.0-macos-third-party-source.zip` with matching archives, hashes, and rebuild instructions. Publish that source archive alongside any Mac binary release. Compatible rebuilt dylibs can replace the libraries under `Contents/Resources/backend/_internal/`; re-sign a modified bundle locally as described in the source archive. Apple system frameworks and system fonts are not bundled.
+
 Principal components include:
 
 | Component | Upstream license/source |
