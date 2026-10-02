@@ -12,7 +12,7 @@ The Apple Silicon package was built and checked on macOS 26.6.2 with Xcode 26.5,
 | Companion process manager | The real AppKit app started its bundled backend in the isolated preview profile; launch session and child process ID matched |
 | Extracted ZIP | Ad-hoc signature verified; backend ran without Homebrew or Python on `PATH` |
 | Local inference | Packaged Whisper tiny transcribed the synthetic English sample correctly with network access disabled |
-| README image | Actual AppKit Home window capture with the clearly labelled demo conversation |
+| README app preview | Actual AppKit Home window capture with the clearly labelled demo conversation, below the branded cover |
 
 The speech sample said: “This is a local transcription test. The Mac application saves clear meeting notes and keeps every conversation organized.” The packaged engine returned that text, language `en`, and device `cpu`. Test audio, model weights, and validation profiles are outside the release bundle.
 

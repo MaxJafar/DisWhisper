@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="docs/brand/readme-cover.png" alt="DisWhisper macOS AppKit companion — Home, local speech models, and a live demo transcript" width="100%">
+  <img src="docs/brand/readme-cover.png" alt="DisWhisper — Your conversations, written. Free, local, open source. Windows + macOS." width="100%">
 </p>
-
-<p align="center"><sub>The native macOS companion, captured with its built-in demo conversation.</sub></p>
 
 <p align="center">
   <a href="https://github.com/MaxJafar/DisWhisper/releases/latest/download/DisWhisper-0.2.1-windows-x64-setup.exe"><b>Download for Windows</b></a>
@@ -28,6 +26,14 @@ No subscription, account with us, or cloud API key is required for local transcr
 - **A dedicated channel.** The bot creates `#live-transcript` when invited, streams recognized speech there, and shares a Markdown export when the meeting ends.
 - **A transcript library.** Search, preview, copy, and open saved meeting files.
 - **Optional meeting notes.** Use Ollama locally, or bring a Groq/OpenAI key for cloud transcription and summaries.
+
+## App preview
+
+<p align="center">
+  <img src="docs/brand/app-screenshot-macos.png" alt="DisWhisper macOS AppKit companion — Home, local speech models, and a live demo transcript" width="100%">
+</p>
+
+<p align="center"><sub>The native macOS companion, captured with its built-in demo conversation. Windows uses the same workspace and visual language.</sub></p>
 
 ## Windows and macOS app builds
 
